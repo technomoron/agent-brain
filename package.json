@@ -1,0 +1,43 @@
+{
+  "packageManager": "pnpm@10.34.5",
+  "engines": {
+    "node": ">=24"
+  },
+  "author": "Bjorn Erik Jacobsen",
+  "license": "MIT",
+  "copyright": "Copyright (c) 2026 Bjørn Erik Jacobsen / Technomoron.com",
+  "name": "@technomoron/agent-mcp",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Project knowledge and skills MCP server extracted from agent-run",
+  "bin": {
+    "agent-mcp": "dist/agent-brain.js",
+    "agent-brain": "dist/agent-brain.js"
+  },
+  "files": [
+    "dist/",
+    "skills/",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "postbuild": "node -e \"require('node:fs').chmodSync('dist/agent-brain.js', 0o755)\"",
+    "test": "pnpm build && pnpm test:integration",
+    "prepack": "pnpm build",
+    "test:integration": "node scripts/test.cjs"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.30.0",
+    "@technomoron/apicore-server": "^1.0.0",
+    "yaml": "^2.9.0",
+    "zod": "^4.5.4",
+    "@technomoron/agent-run": "^0.99.45",
+    "jsonc-parser": "^3.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.3",
+    "typescript": "^5.9.3",
+    "pnpm": "10.34.5"
+  }
+}

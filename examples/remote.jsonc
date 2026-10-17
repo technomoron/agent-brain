@@ -1,0 +1,22 @@
+{
+  // Keep this file and repository data outside source checkouts.
+  "issuer": "https://mcp.example.com/oauth",
+  "resource": "https://mcp.example.com/mcp",
+  "runtime": "/srv/agent-mcp/runtime",
+  "listen": { "host": "127.0.0.1", "port": 3000 },
+  "users": [
+    { "subject": "bjorn", "login": "bjorn", "passwordHashEnv": "MCP_BJORN_PASSWORD_HASH", "totpSecretEnv": "MCP_BJORN_TOTP" },
+    { "subject": "ci", "login": "ci", "kind": "service" }
+  ],
+  "clients": [
+    { "id": "desktop", "kind": "public", "redirectUris": ["http://127.0.0.1:8123/callback"], "repos": ["technomoron/*"], "permissions": ["read", "write", "review"] },
+    { "id": "ci", "kind": "service", "subject": "ci", "secretEnv": "MCP_CI_SECRET", "repos": ["technomoron/agent-run"], "permissions": ["read"] }
+  ],
+  "access": [
+    { "subject": "bjorn", "repos": ["technomoron/*"], "permissions": ["read", "write", "review"] },
+    { "subject": "ci", "repos": ["technomoron/agent-run"], "permissions": ["read"] }
+  ],
+  "repositories": [
+    { "id": "technomoron/agent-run", "configRoot": "/srv/agent-mcp/data/technomoron/agent-run", "cwd": "/srv/checkouts/technomoron/agent-run" }
+  ]
+}
