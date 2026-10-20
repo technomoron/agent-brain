@@ -36,7 +36,7 @@ async function brainMain(argv, wrapperCommand) {
             throw new Error('serve-remote requires --remote-config <private JSONC file>');
         const { serveRemote } = await Promise.resolve().then(() => require('./remote-server'));
         const service = await serveRemote(path.resolve(values['remote-config']));
-        process.stderr.write('agent-mcp remote endpoint listening behind HTTPS proxy\n');
+        process.stderr.write('agent-brain remote endpoint listening behind HTTPS proxy\n');
         for (const signal of ['SIGINT', 'SIGTERM'])
             process.once(signal, () => { void service.close(); });
         return;

@@ -29,7 +29,7 @@ export class GithubReviews {
 		if (!token) throw new Error('Set ' + this.config.tokenEnv + ' for GitHub reviews');
 		const response = await fetch('https://api.github.com/repos/' + this.repository + '/issues' + route, {
 			method, redirect: 'error', signal: AbortSignal.timeout(30000), headers: { accept: 'application/vnd.github+json',
-				'content-type': 'application/json', 'user-agent': 'agent-mcp', authorization: 'Bearer ' + token,
+				'content-type': 'application/json', 'user-agent': 'agent-brain', authorization: 'Bearer ' + token,
 				'X-GitHub-Api-Version': '2026-03-10' }, ...(body ? { body: JSON.stringify(body) } : {})
 		});
 		if (!response.ok) throw new Error('GitHub review request failed with HTTP ' + response.status);

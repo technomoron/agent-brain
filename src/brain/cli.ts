@@ -31,7 +31,7 @@ export async function brainMain(argv: string[], wrapperCommand?: 'mcp' | 'create
 		if (!values['remote-config']) throw new Error('serve-remote requires --remote-config <private JSONC file>');
 		const { serveRemote } = await import('./remote-server');
 		const service = await serveRemote(path.resolve(values['remote-config']));
-		process.stderr.write('agent-mcp remote endpoint listening behind HTTPS proxy\n');
+		process.stderr.write('agent-brain remote endpoint listening behind HTTPS proxy\n');
 		for (const signal of ['SIGINT', 'SIGTERM'] as const) process.once(signal, () => { void service.close(); });
 		return;
 	}

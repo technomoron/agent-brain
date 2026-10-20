@@ -20,7 +20,7 @@ try {
 	if (result.error) throw result.error;
 	process.exitCode = result.status ?? 1;
 	if (process.exitCode === 0) {
-		const remote = spawnSync(process.execPath, ['--test', path.join(root, 'scripts/test-remote.cjs')], { cwd: root, stdio: 'inherit', shell: false });
+		const remote = spawnSync(process.execPath, ['--test', path.join(root, 'scripts/test-remote.cjs'), path.join(root, 'scripts/test-config-deploy.cjs')], { cwd: root, stdio: 'inherit', shell: false });
 		if (remote.error) throw remote.error;
 		process.exitCode = remote.status ?? 1;
 	}

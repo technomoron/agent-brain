@@ -1,18 +1,18 @@
-# agent-mcp
+# agent-brain
 
 Project knowledge, skills, reviews and tasks through MCP. Extracted from agent-run. Requires Node.js 24 or newer.
 
-The package provides both `agent-mcp` and the compatible `agent-brain` command. Existing `brain.jsonc`, source-root registrations, Markdown storage, MCP server names and per-user sockets remain compatible. No knowledge or profile files are moved by installing this package.
+The package provides the `agent-brain` command, with `agent-mcp` retained as a compatibility alias. Existing `brain.jsonc`, source-root registrations, Markdown storage, MCP server names and per-user sockets remain compatible. No knowledge or profile files are moved by installing this package.
 
 ## Development
 
-Keep the agent-run and agent-mcp checkouts next to each other. Build agent-run first, then install this package’s dependencies and link the local agent-run checkout:
+Keep the agent-run and agent-brain checkouts next to each other. Build agent-run first, then install this package’s dependencies and link the local agent-run checkout:
 
 ```sh
 cd ../agent-run
 pnpm install
 pnpm build
-cd ../agent-mcp
+cd ../agent-brain
 pnpm install
 node scripts/link-agent-run.cjs
 pnpm build
@@ -25,11 +25,11 @@ The server currently depends on `@technomoron/agent-run` for profile resolution,
 ## Running
 
 ```sh
-agent-mcp init --configdir /path/to/agent-config
-agent-mcp serve --configdir /path/to/agent-config
+agent-brain init --configdir /path/to/agent-config
+agent-brain serve --configdir /path/to/agent-config
 ```
 
-Agents continue to use `agent-brain mcp --configdir ... --cwd ...`. Agent-run’s `mcp`, `create` and `project` commands delegate to `agent-mcp` on PATH. Install the server separately before using those commands or knowledge compression.
+Agents continue to use `agent-brain mcp --configdir ... --cwd ...`. Agent-run’s `mcp`, `create` and `project` commands delegate to `agent-brain` on PATH. Install the server separately before using those commands or knowledge compression.
 
 Operational systemd and Windows installation scripts remain in agent-run, which orchestrates the native agent environment. See agent-run’s README for the storage model, CLI operations, permissions and service installation.
 
@@ -56,7 +56,7 @@ contain these APIs. Reinstallation replaces this development link. No release or
 production deployment is implied.
 
 Copy `examples/remote.jsonc` outside the source tree and customize absolute paths.
-Create each repository's separate configuration root using `agent-mcp init
+Create each repository's separate configuration root using `agent-brain init
 --configdir <root> --cwd <checkout>`. Run the server as a dedicated OS user with a
 private runtime directory (0700). Supply two different random signing secrets of
 at least 32 characters through `MCP_OAUTH_ACCESS_SECRET` and
@@ -66,7 +66,7 @@ in the user's authenticator. Enrolment and password management are administrator
 operations. Service accounts use confidential client secrets from the environment.
 Never put credentials in source control or client command arguments.
 
-Start `agent-mcp serve-remote --remote-config /private/remote.jsonc`. It binds only
+Start `agent-brain serve-remote --remote-config /private/remote.jsonc`. It binds only
 to loopback, or the configured private Unix socket. Nginx terminates HTTPS and can
 proxy the issuer, discovery and resource paths to this process:
 
@@ -210,3 +210,20 @@ Global writes require a wildcard token and current wildcard write permission.
 Pool writes require write permission for every registered member. Reading a
 repository includes its global and pool knowledge. Reviews, their counters and
 history, tasks, and GitHub issue targets stay with the individual repository.
+
+### Configuration push deployment
+
+`ops/config-policy.cjs` and `ops/config-deploy.cjs` support the private configuration
+repository's push workflow. `.brain-deploy.json` explicitly lists pools and served
+repositories; source-machine roots are replaced by server checkout roots. Core
+skills remain owned by this package. A three-way comparison preserves independent
+MCP writes and rejects conflicting Git edits before changing live data.
+
+The installed forced-command entry accepts only `deploy <full-main-SHA>`. The
+root-owned controller runs Git and data operations as `agent-mcp`, stops the
+service only after validation, updates repository/group registration without
+changing users or client grants, and restarts with health checks and rollback.
+The controller uses root-owned packaged deployment code; it never runs the
+configuration checkout's validation or deployment scripts on the server.
+The existing `agent-mcp` service account and on-disk paths are retained for
+compatibility; the application and package are named agent-brain.
