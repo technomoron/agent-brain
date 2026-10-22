@@ -28,6 +28,28 @@ test('deployment membership is explicit and rejects path traversal or duplicate 
 		assert.throws(() => manifest({ ...good, repositories: [{ id, pool: 'customer' }] }));
 	assert.throws(() => manifest({ ...good, repositories: [good.repositories[0], good.repositories[0]] }));
 });
+test('independent repositories deploy without a pool and retain isolated project context', (t) => {
+ const { BrainStore } = require('../dist/brain/store');
+ const { createProfileMarker } = require('@technomoron/agent-run/dist/manifest');
+ const root = fs.mkdtempSync(path.join(os.tmpdir(), 'brain-independent-'));
+ t.after(() => fs.rmSync(root, {recursive:true,force:true}));
+ const selection = manifest({version:1,pools:[],repositories:[{id:'owner/one'},{id:'owner/two'}]});
+ assert.throws(() => manifest({...selection,repositories:[{id:'owner/one',pool:'missing'}]}), /unknown pool/);
+ const checkouts=path.join(root,'checkouts'), source=path.join(root,'source'), live=path.join(root,'live');
+ for(const repo of selection.repositories){
+  const dir=path.join(source,'projects',repo.id);fs.mkdirSync(path.join(dir,'memory'),{recursive:true});
+  fs.writeFileSync(path.join(dir,'config.yaml'),require('yaml').stringify({name:repo.id,roots:[path.join(checkouts,repo.id)]}));
+  fs.writeFileSync(path.join(dir,'memory','private.md'),'# '+repo.id+' private knowledge');
+ }
+ const snapshot=readSnapshot(source,selection,{checkouts});
+ for(const [name,text] of Object.entries(snapshot)){const file=path.join(live,name);fs.mkdirSync(path.dirname(file),{recursive:true});fs.writeFileSync(file,fileContents(text));}
+ for(const repo of selection.repositories){
+  const cwd=path.join(checkouts,repo.id);fs.mkdirSync(cwd,{recursive:true});createProfileMarker(path.join(live,'projects',repo.id));
+  const store=new BrainStore(live,cwd);
+  try{assert.equal(store.pool,undefined);assert.deepEqual(store.scopes.map(s=>s.scope),['global','project']);assert.deepEqual(store.allKnowledge().map(k=>k.title),[repo.id+' private knowledge']);assert.deepEqual(store.knowledgeErrors,[]);}
+  finally{store.close();}
+ }
+});
 test('configuration snapshot ignores unserved projects and MCP-owned skills and rejects symlinks and scope leaks', (t) => {
 	const root = fs.mkdtempSync(path.join(os.tmpdir(), 'brain-config-policy-'));
 	t.after(() => fs.rmSync(root, { recursive: true, force: true }));

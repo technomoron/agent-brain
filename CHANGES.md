@@ -1,3 +1,7 @@
+Version 0.1.1 (2026-10-22)
+--------------------------
+* Allow independent repositories without a pool in configuration deployment and Git sync.
+
 Version 0.1.0 (2026-10-22)
 --------------------------
 * Extract the project knowledge and skills MCP server from agent-run.

@@ -226,6 +226,9 @@ does not replace an explicit user constraint.
 For a remote server, set `dataRoot` to this shared configuration root and use
 that same `configRoot` for its groups and repositories. The existing `group`
 registration identifies the pool and must match the project's `pool` field.
+For independent repositories, omit `pool` from both the project and deployment
+manifest, and omit `group` from the remote registration. They receive global
+and project context without sharing a pool.
 Legacy separate group roots remain supported when `dataRoot` is absent.
 Global writes require a wildcard token and current wildcard write permission.
 Pool writes require write permission for every registered member. Reading a

@@ -55,11 +55,11 @@ function manifest(value) {
 		if (
 			!repo ||
 			!repoPattern.test(repo.id) ||
-			!value.pools.includes(repo.pool) ||
+			(repo.pool !== undefined && !value.pools.includes(repo.pool)) ||
 			Object.keys(repo).some((k) => !['id', 'pool'].includes(k)) ||
 			ids.has(repo.id)
 		)
-			throw Error('Invalid, duplicate or unpooled repository');
+			throw Error('Invalid or duplicate repository or unknown pool');
 		ids.add(repo.id);
 	}
 	if (!ids.size) throw Error('At least one repository is required');
