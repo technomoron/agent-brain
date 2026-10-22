@@ -1,0 +1,98 @@
+name: Release agent-brain
+
+on:
+  push:
+    tags:
+      - '@technomoron/agent-brain@*'
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing release tag to retry
+        required: true
+        type: string
+
+permissions:
+  contents: write
+  id-token: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Set up pnpm
+        uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: '24'
+          registry-url: 'https://registry.npmjs.org'
+          cache: 'pnpm'
+
+      - name: Install Dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify tag matches package version
+        env:
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+        run: |
+          EXPECTED="$(node -p 'const p=require("./package.json"); p.name+"@"+p.version')"
+          test "$RELEASE_TAG" = "$EXPECTED"
+
+      - name: Verify Release Candidate
+        run: pnpm release:preflight
+
+      - name: Pack npm Package
+        id: pack
+        run: |
+          TARBALL="$(npm pack --silent)"
+          test -n "$TARBALL"
+          echo "tarball=$TARBALL" >> "$GITHUB_OUTPUT"
+
+      - name: Check whether version already exists on npm
+        id: npm_version
+        run: |
+          NAME=$(node -p "require('./package.json').name")
+          VERSION=$(node -p "require('./package.json').version")
+          if npm view "${NAME}@${VERSION}" version >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Select npm provenance mode
+        id: provenance
+        run: |
+          if [ "${{ github.event.repository.visibility }}" = "public" ]; then
+            echo "arg=--provenance" >> "$GITHUB_OUTPUT"
+          else
+            echo "Private source repository: publishing without npm provenance"
+            echo "arg=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Publish npm Package
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        if: steps.npm_version.outputs.exists != 'true'
+        run: npm publish "${{ steps.pack.outputs.tarball }}" --access public ${{ steps.provenance.outputs.arg }}
+
+      - name: Create or Update GitHub Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+          TARBALL: ${{ steps.pack.outputs.tarball }}
+        run: |
+          TAG="$RELEASE_TAG"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" "$TARBALL" --clobber
+          else
+            gh release create "$TAG" "$TARBALL" --title "$TAG" --verify-tag
+          fi

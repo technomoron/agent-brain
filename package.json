@@ -8,7 +8,6 @@
   "copyright": "Copyright (c) 2026 Bjørn Erik Jacobsen / Technomoron.com",
   "name": "@technomoron/agent-brain",
   "version": "0.1.0",
-  "private": true,
   "description": "Project knowledge and skills MCP server extracted from agent-run",
   "bin": {
     "agent-brain": "dist/agent-brain.js",
@@ -19,26 +18,40 @@
     "skills/",
     "README.md",
     "LICENSE",
-    "ops/"
+    "ops/",
+    "CHANGES.md",
+    "examples/"
   ],
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "postbuild": "node -e \"require('node:fs').chmodSync('dist/agent-brain.js', 0o755)\"",
     "test": "pnpm build && pnpm test:integration",
     "prepack": "pnpm build",
-    "test:integration": "node scripts/test.cjs"
+    "test:integration": "node scripts/test.cjs",
+    "release:preflight": "pnpm build && pnpm test:integration"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.30.0",
-    "@technomoron/apicore-server": "^1.0.0",
+    "@technomoron/apicore-server": "^1.1.0",
     "yaml": "^2.9.0",
     "zod": "^4.5.4",
-    "@technomoron/agent-run": "^0.99.45",
+    "@technomoron/agent-run": "^0.99.46",
     "jsonc-parser": "^3.3.1"
   },
   "devDependencies": {
     "@types/node": "^24.13.3",
     "typescript": "^5.9.3",
     "pnpm": "10.34.5"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/technomoron/agent-brain.git"
+  },
+  "homepage": "https://github.com/technomoron/agent-brain#readme",
+  "bugs": {
+    "url": "https://github.com/technomoron/agent-brain/issues"
+  },
+  "publishConfig": {
+    "access": "public"
   }
 }

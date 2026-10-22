@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Sourced by agent-run/scripts/test.sh after its isolated test setup.
+# Sourced by test-launcher.sh using the installed agent-run package.
 # Compression uses the normal launch path and preserves the selected scope and agent.
 COMPRESS_CONFIG="$TMP_DIR/compress-config"
 cp -R "$EXAMPLE/agent-config" "$COMPRESS_CONFIG"
@@ -117,6 +117,6 @@ if node "$BRAIN_BIN" --configdir "$BRAIN_SYNC_ROOT" save unexpected >"$TMP_DIR/b
 fi
 assert_contains "$TMP_DIR/brain-extra.out" "Unexpected arguments"
 
-node --test "$MCP_ROOT/scripts/test-brain.cjs" "$ROOT/scripts/test-windows-guards.cjs" "$ROOT/scripts/test-updater.cjs"
+node --test "$MCP_ROOT/scripts/test-brain.cjs"
 
 echo "All tests passed"

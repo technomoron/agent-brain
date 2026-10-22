@@ -4,6 +4,15 @@ Project knowledge, skills, reviews and tasks through MCP. Extracted from agent-r
 
 The package provides the `agent-brain` command, with `agent-mcp` retained as a compatibility alias. Existing `brain.jsonc`, source-root registrations, Markdown storage, MCP server names and per-user sockets remain compatible. No knowledge or profile files are moved by installing this package.
 
+## Installation
+
+```sh
+npm install --global @technomoron/agent-brain
+```
+
+The npm package is public. The source repository and private skill catalogs keep
+their own access controls. Node.js 24 or newer is required.
+
 ## Development
 
 Keep the agent-run and agent-brain checkouts next to each other. Build agent-run first, then install this package’s dependencies and link the local agent-run checkout:
@@ -20,7 +29,7 @@ pnpm build
 
 Run `pnpm test` for the server and agent-run integration suite. The test harness supplies this checkout’s executables through an isolated temporary PATH. Run `npm run build` to check the npm build path.
 
-The server currently depends on `@technomoron/agent-run` for profile resolution, initialization and Nunjucks skill rendering. This preserves existing behavior while moving server ownership into this repository; it does not yet make the server independent of the launcher’s profile format. Local development must link the modified agent-run checkout, which emits declarations for these libraries.
+The server currently depends on `@technomoron/agent-run` for profile resolution, initialization and Nunjucks skill rendering. This preserves existing behavior while moving server ownership into this repository; it does not yet make the server independent of the launcher’s profile format. Link the sibling launcher checkout when developing changes to those libraries; normal installations use the published dependency.
 
 ## Running
 
@@ -50,15 +59,22 @@ Keep MCP-owned skills and tools with this implementation. Independent reusable s
 
 `technomoron/agent-mcp-skills` is the private source catalog for reusable skills. This extraction does not implement Git catalog fetching, refresh schedules, grouped selection or customer-level scopes. Existing skills continue to load from external global and project profile directories.
 
-This repository is private and npm publishing is disabled. There is no release or publishing workflow.
+## Releases
+
+The release workflow publishes `@technomoron/agent-brain` on npm with public
+access. Tags use `@technomoron/agent-brain@<version>` and must match the package
+version. Run `pnpm release:preflight` before committing and tagging a release.
+The workflow checks the tag, runs the integration suite, and attaches the package
+tarball to its GitHub release. Configure `NPM_TOKEN` in the source repository for
+npm publishing; private source repositories publish without provenance.
 
 ## Remote OAuth endpoint
 
-The opt-in remote endpoint requires the accompanying **unreleased apicore** OAuth
-changes. For local development, build the existing `../apicore` checkout and run
-`node scripts/link-apicore.cjs`; the published apicore 1.0.0 package does not yet
-contain these APIs. Reinstallation replaces this development link. No release or
-production deployment is implied.
+The remote endpoint uses the generic OAuth APIs in
+`@technomoron/apicore-server` 1.1.0 or newer. Normal npm installations include
+that dependency. When developing changes to apicore locally, build the sibling
+`../apicore` checkout and run `node scripts/link-apicore.cjs`; reinstalling
+dependencies replaces this development link.
 
 Copy `examples/remote.jsonc` outside the source tree and customize absolute paths.
 Create each repository's separate configuration root using `agent-brain init

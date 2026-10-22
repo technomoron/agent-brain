@@ -418,7 +418,7 @@ test('generated MCP files stay identical across install locations and runtime en
 		process.stdout.write(JSON.stringify(renderProfile(process.argv[2], process.argv[3], true, null, undefined, JSON.parse(process.argv[4])).files));
 	`;
 	for (const inheritedEnv of [process.env, {}]) {
-		const childEnv = { ...inheritedEnv, NODE_PATH: path.join(path.dirname(require.resolve('@technomoron/agent-run/package.json')), 'node_modules') };
+		const childEnv = { ...inheritedEnv, NODE_PATH: require('node:module').createRequire(require.resolve('@technomoron/agent-run/package.json')).resolve.paths('jsonc-parser').join(path.delimiter) };
 		const result = spawnSync(process.execPath, ['-e', script, path.join(copiedDist, 'renderer.js'), project.cwd, project.directory, JSON.stringify(options)], {
 			env: childEnv, encoding: 'utf8'
 		});

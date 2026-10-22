@@ -4,7 +4,6 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
 const root = path.resolve(__dirname, '..');
-const launcher = path.dirname(require.resolve('@technomoron/agent-run/package.json'));
 const bin = fs.mkdtempSync(path.join(os.tmpdir(), 'agent-mcp-bin-'));
 try {
 	for (const name of ['agent-mcp', 'agent-brain']) {
@@ -13,8 +12,8 @@ try {
 			fs.writeFileSync(path.join(bin, name + '.cmd'), `@"${process.execPath}" "${entry}" %*\r\n`);
 		} else fs.symlinkSync(entry, path.join(bin, name));
 	}
-	const result = spawnSync('bash', [path.join(launcher, 'scripts', 'test.sh'), '--mcp-tests', root], {
-		cwd: launcher, stdio: 'inherit', shell: false,
+	const result = spawnSync('bash', [path.join(root, 'scripts', 'test-launcher.sh')], {
+		cwd: root, stdio: 'inherit', shell: false,
 		env: { ...process.env, PATH: bin + path.delimiter + process.env.PATH }
 	});
 	if (result.error) throw result.error;
