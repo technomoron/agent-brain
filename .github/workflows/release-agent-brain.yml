@@ -53,7 +53,7 @@ jobs:
       - name: Pack npm Package
         id: pack
         run: |
-          TARBALL="$(npm pack --silent)"
+          TARBALL="$(npm pack --ignore-scripts --silent)"
           test -n "$TARBALL"
           echo "tarball=$TARBALL" >> "$GITHUB_OUTPUT"
 
