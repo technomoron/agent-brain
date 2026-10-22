@@ -63,18 +63,24 @@ function createBrainServer(store, options = {}) {
     const revision = zod_1.z.string().regex(/^[a-f0-9]{64}$/);
     tool('brain_status', 'Show the active project and available scopes. Global is server-wide; pool is shared only by members of the active pool.', {}, true, () => ({ profile: store.profile, pool: store.pool, scopes: store.scopes.map((entry) => entry.scope), reviewBackend: github ? 'github' : 'internal', repository: github?.repository ?? options.repository, group: options.group }));
     tool('sync_status', 'Preview Git state and the canonical files eligible for saving. Runtime files, indexes, credentials, and native agent state are excluded.', {}, true, () => (0, git_1.gitPreview)(store));
-    if (!options.allowTool || options.allowTool('sync'))
-        server.registerTool('sync', { description: 'Synchronize the configuration Git repository when the user requests it. save commits and pushes; sync commits, pulls with rebase, then pushes; pull and push only transfer existing commits. Commit messages are generated unless supplied. Use sync_status to inspect eligible files.',
-            inputSchema: { action: zod_1.z.enum(['init', 'save', 'pull', 'push', 'sync']), confirmed: zod_1.z.literal(true).optional(), message: zod_1.z.string().min(1).max(1000).optional() },
+    for (const name of ['brain_sync', 'brain_flush', 'sync', 'flush']) {
+        if (options.allowTool && !options.allowTool(name))
+            continue;
+        server.registerTool(name, { description: 'When the user explicitly asks "brain sync" or "brain flush", commit and push canonical Brain changes to its configuration repository. Messages are generated. Report errors and unsynced changes to the user. This does not commit project source code.',
+            inputSchema: { action: zod_1.z.enum(['init', 'save', 'pull', 'push', 'sync']).default('sync'), confirmed: zod_1.z.literal(true).optional(), message: zod_1.z.string().min(1).max(1000).optional() },
             annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true }
         }, async ({ action, message }) => {
             try {
-                return { content: [{ type: 'text', text: JSON.stringify((0, git_1.syncGit)(store, action, message)) }] };
+                if (options.sync && !['save', 'sync'].includes(action))
+                    throw new Error('Remote Brain supports sync/save/flush only.');
+                const result = options.sync ? await options.sync(message) : (0, git_1.syncGit)(store, action, message);
+                return { content: [{ type: 'text', text: JSON.stringify(result) }] };
             }
             catch (error) {
                 return { isError: true, content: [{ type: 'text', text: error instanceof Error ? error.message : String(error) }] };
             }
         });
+    }
     tool('get_context', 'Retrieve relevant constraints and knowledge before substantial work. Check omitted; explicitly fetch required knowledge if the budget excluded it.', {
         task: zod_1.z.string().max(10000), files: zod_1.z.array(zod_1.z.string()).max(100).optional(), symbols: zod_1.z.array(zod_1.z.string()).max(100).optional()
     }, false, ({ task, files, symbols }) => store.context(task, files, symbols));

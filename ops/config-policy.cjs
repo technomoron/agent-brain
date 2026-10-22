@@ -217,4 +217,4 @@ function mergeSnapshots(base, live, incoming) {
 	}
 	return { changes, conflicts };
 }
-module.exports = { manifest, readSnapshot, mergeSnapshots, fileContents, repoPattern, poolPattern };
+module.exports = { manifest, readSnapshot, mergeSnapshots, fileContents, repoPattern, poolPattern, coreSkills };

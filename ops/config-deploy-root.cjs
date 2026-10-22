@@ -5,7 +5,7 @@ const fs = require('node:fs'),
 const { manifest } = require('./config-policy.cjs');
 const worker = '/opt/agent-mcp/current/node_modules/@technomoron/agent-brain/ops/config-deploy.cjs';
 const file = '/etc/agent-mcp/remote.jsonc',
-	lock = '/run/lock/agent-brain-config-deploy',
+	lock = '/var/lib/agent-mcp/config-deploy/catalog.lock',
 	maintenance = '/run/agent-brain-config-deploy-maintenance';
 let interrupted = false;
 for (const signal of ['SIGTERM', 'SIGHUP', 'SIGINT'])

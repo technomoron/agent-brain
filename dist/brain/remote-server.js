@@ -4,6 +4,7 @@ exports.createRemoteApi = createRemoteApi;
 exports.serveRemote = serveRemote;
 const fs = require("node:fs");
 const path = require("node:path");
+const node_child_process_1 = require("node:child_process");
 const node_crypto_1 = require("node:crypto");
 const apicore_server_1 = require("@technomoron/apicore-server");
 const streamableHttp_js_1 = require("@modelcontextprotocol/sdk/server/streamableHttp.js");
@@ -46,7 +47,7 @@ async function createRemoteApi(configFile) {
     // Policy edits apply immediately. Storage locations, signing keys and client registration require a restart.
     const policy = () => {
         const current = (0, remote_policy_1.readRemoteConfig)(configFile);
-        if (JSON.stringify(current.repositories) !== JSON.stringify(initial.repositories) || JSON.stringify(current.groups) !== JSON.stringify(initial.groups) || current.dataRoot !== initial.dataRoot || current.issuer !== initial.issuer || current.resource !== initial.resource) {
+        if (JSON.stringify(current.repositories) !== JSON.stringify(initial.repositories) || JSON.stringify(current.groups) !== JSON.stringify(initial.groups) || current.dataRoot !== initial.dataRoot || JSON.stringify(current.gitSync) !== JSON.stringify(initial.gitSync) || current.issuer !== initial.issuer || current.resource !== initial.resource) {
             throw new Error('Restart the remote server after changing repository locations or endpoints');
         }
         return current;
@@ -147,7 +148,38 @@ async function createRemoteApi(configFile) {
                 store.close();
                 return reply.code(503).send({ error: 'Repository profile changed; restore its registration before continuing' });
             }
-            server = (0, server_1.createBrainServer)(store, { repository, group: repo.group, repositories: catalog, allowScopeWrite: (scope) => {
+            const canWriteScope = (scope) => {
+                const scopes = claims.scope.split(' ');
+                if (scope === 'project')
+                    return permissions.has('write');
+                if (scope === 'global')
+                    return scopes.includes('repo:*') && (0, remote_policy_1.allowedGrant)(policy(), claims.sub, claims.client_id, ['read', 'write', 'repo:*']);
+                return !!repo.group && initial.repositories.filter(member => member.group === repo.group).every(member => (0, remote_policy_1.repositoryPermissions)(policy(), claims.sub, claims.client_id, scopes, member.id).has('write'));
+            };
+            server = (0, server_1.createBrainServer)(store, { sync: async (message) => {
+                    if (!initial.gitSync || !initial.dataRoot)
+                        throw new Error('Brain Git synchronization is not configured; changes remain on the server.');
+                    const scopes = ['projects/' + repository];
+                    if (repo.group && canWriteScope('pool'))
+                        scopes.push('pools/' + repo.group);
+                    if (canWriteScope('global'))
+                        scopes.push('global');
+                    return new Promise((resolve, reject) => {
+                        const child = (0, node_child_process_1.execFile)(process.execPath, [path.resolve(__dirname, '../../ops/config-sync.cjs')], { timeout: 180000, maxBuffer: 1024 * 1024 }, (error, stdout, stderr) => {
+                            if (error)
+                                reject(new Error(stderr.trim() || error.message));
+                            else {
+                                try {
+                                    resolve(JSON.parse(stdout));
+                                }
+                                catch {
+                                    reject(new Error('Invalid Brain sync response'));
+                                }
+                            }
+                        });
+                        child.stdin?.end(JSON.stringify({ ...initial.gitSync, dataRoot: initial.dataRoot, scopes, reviews: permissions.has('review'), message }));
+                    });
+                }, repository, group: repo.group, repositories: catalog, allowScopeWrite: (scope) => {
                     if (!initial.dataRoot || scope === 'project')
                         return true;
                     const scopes = claims.scope.split(' ');

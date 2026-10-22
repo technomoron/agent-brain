@@ -1,5 +1,6 @@
 import * as fs from 'node:fs';
 import * as path from 'node:path';
+import { execFile } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { ApiServer, BaseAuthAdapter, MemAuthStore, JsonTokenStore, OAuthAuthorizationServer, OAuthPasswordLogin, OAuthProtocolError, verifyTotp } from '@technomoron/apicore-server';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
@@ -37,7 +38,7 @@ export async function createRemoteApi(configFile: string) {
 	// Policy edits apply immediately. Storage locations, signing keys and client registration require a restart.
 	const policy = () => {
 		const current = readRemoteConfig(configFile);
-		if (JSON.stringify(current.repositories) !== JSON.stringify(initial.repositories) || JSON.stringify(current.groups) !== JSON.stringify(initial.groups) || current.dataRoot !== initial.dataRoot || current.issuer !== initial.issuer || current.resource !== initial.resource) {
+		if (JSON.stringify(current.repositories) !== JSON.stringify(initial.repositories) || JSON.stringify(current.groups) !== JSON.stringify(initial.groups) || current.dataRoot !== initial.dataRoot || JSON.stringify(current.gitSync) !== JSON.stringify(initial.gitSync) || current.issuer !== initial.issuer || current.resource !== initial.resource) {
 			throw new Error('Restart the remote server after changing repository locations or endpoints');
 		}
 		return current;
@@ -124,7 +125,25 @@ export async function createRemoteApi(configFile: string) {
 			const repo = initial.repositories.find((item) => item.id === repository)!;
 			store = new BrainStore(repo.configRoot, repo.cwd);
 			if ((repo.group && store.profile !== 'projects/' + repo.id) || (initial.dataRoot && store.pool !== repo.group)) { store.close(); return reply.code(503).send({ error: 'Repository profile changed; restore its registration before continuing' }); }
-			server = createBrainServer(store, { repository, group: repo.group, repositories: catalog, allowScopeWrite: (scope) => {
+			const canWriteScope = (scope: 'project' | 'pool' | 'global') => {
+				const scopes = claims.scope.split(' ');
+				if (scope === 'project') return permissions.has('write');
+				if (scope === 'global') return scopes.includes('repo:*') && allowedGrant(policy(), claims.sub, claims.client_id, ['read','write','repo:*']);
+				return !!repo.group && initial.repositories.filter(member => member.group === repo.group).every(member => repositoryPermissions(policy(), claims.sub, claims.client_id, scopes, member.id).has('write'));
+			};
+			server = createBrainServer(store, { sync: async (message) => {
+				if (!initial.gitSync || !initial.dataRoot) throw new Error('Brain Git synchronization is not configured; changes remain on the server.');
+				const scopes = ['projects/' + repository];
+				if (repo.group && canWriteScope('pool')) scopes.push('pools/' + repo.group);
+				if (canWriteScope('global')) scopes.push('global');
+				return new Promise((resolve, reject) => {
+					const child = execFile(process.execPath, [path.resolve(__dirname, '../../ops/config-sync.cjs')], { timeout: 180000, maxBuffer: 1024 * 1024 }, (error, stdout, stderr) => {
+						if (error) reject(new Error(stderr.trim() || error.message));
+						else { try { resolve(JSON.parse(stdout)); } catch { reject(new Error('Invalid Brain sync response')); } }
+					});
+					child.stdin?.end(JSON.stringify({ ...initial.gitSync, dataRoot: initial.dataRoot, scopes, reviews: permissions.has('review'), message }));
+				});
+			}, repository, group: repo.group, repositories: catalog, allowScopeWrite: (scope) => {
 				if (!initial.dataRoot || scope === 'project') return true;
 				const scopes = claims.scope.split(' ');
 				if (scope === 'global') return scopes.includes('repo:*') && allowedGrant(policy(), claims.sub, claims.client_id, ['read','write','repo:*']);

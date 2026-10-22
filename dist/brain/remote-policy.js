@@ -18,6 +18,7 @@ exports.permission = zod_1.z.enum(['read', 'write', 'review']);
 exports.remoteConfigSchema = zod_1.z.object({
     issuer: https, resource: https, runtime: absolute,
     dataRoot: absolute.optional(),
+    gitSync: zod_1.z.object({ catalog: absolute, state: absolute }).strict().optional(),
     accessSecretEnv: envName.default('MCP_OAUTH_ACCESS_SECRET'), refreshSecretEnv: envName.default('MCP_OAUTH_REFRESH_SECRET'),
     listen: zod_1.z.object({ host: zod_1.z.literal('127.0.0.1').default('127.0.0.1'), port: zod_1.z.number().int().min(1).max(65535).default(3000), socket: absolute.optional() }).strict().default({ host: '127.0.0.1', port: 3000 }),
     users: zod_1.z.array(zod_1.z.object({ subject: zod_1.z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/), login: zod_1.z.string().min(1).max(200),
@@ -119,7 +120,7 @@ function toolPermission(name) {
         return 'read';
     if (reviewTools.has(name))
         return 'review';
-    if (['sync', 'sync_status', 'todo_import', 'todo_sync', 'review_archive'].includes(name))
+    if (['sync_status', 'todo_import', 'todo_sync', 'review_archive'].includes(name))
         return null;
-    return ['remember', 'amend_knowledge', 'promote', 'deprecate_knowledge', 'todo_add', 'todo_update', 'todo_complete'].includes(name) ? 'write' : null;
+    return ['brain_sync', 'brain_flush', 'sync', 'flush', 'remember', 'amend_knowledge', 'promote', 'deprecate_knowledge', 'todo_add', 'todo_update', 'todo_complete'].includes(name) ? 'write' : null;
 }

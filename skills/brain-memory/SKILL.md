@@ -59,3 +59,15 @@ Review findings also need a severity, and the store assigns their C1, H1, M1, L1
 Use todo tools for tasks and preserve their external identities. Reusable workflows belong in skills/<name>/SKILL.md; actual reusable templates belong in templates/. These are separate from knowledge items, and remember does not install skills or templates. Keep source references and distinguish current behavior from historical notes and planned features. Keep project-specific content in project scope; default is only for work outside configured projects.
 
 Pool scope: `global/` is server-wide, `pools/<name>/` is shared by the active pool, and `projects/<owner>/<repo>/` belongs to one repository. Use `scope: pool` only for deliberately shared pool knowledge. Keep review findings and tasks in their individual repository. Global intent must still be explicit.
+
+## Synchronizing saved Brain changes
+
+When the user explicitly asks `brain sync` or `brain flush`, call the
+`brain_sync` or `brain_flush` MCP tool
+with its default action. A bare “sync” or “flush” is not an explicit Brain command;
+use the conversation context or clarify the intended target. It commits and pushes canonical Brain data using a
+generated message. Report the returned result; if it fails, warn that changes
+remain on the server and describe the cause. Do not claim GitHub is up to date
+without a successful result. Agent-run also flushes remote Brain when the session
+exits. This only synchronizes Brain data; it does not authorize committing or
+pushing project source code.

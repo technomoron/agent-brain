@@ -20,6 +20,7 @@ import { registerRepositoryTools, localRepositoryCatalog, type RepositoryCatalog
 export { defaultSocketPath } from './config';
 
 export interface BrainServerOptions {
+	sync?: (message?: string) => Promise<unknown>;
 	allowTool?: (name: string) => boolean;
 	allowScopeWrite?: (scope: import('./store').Scope) => boolean;
 	repository?: string;
@@ -59,13 +60,19 @@ export function createBrainServer(store: BrainStore, options: BrainServerOptions
 	const revision = z.string().regex(/^[a-f0-9]{64}$/);
 	tool('brain_status', 'Show the active project and available scopes. Global is server-wide; pool is shared only by members of the active pool.', {}, true, () => ({ profile: store.profile, pool: store.pool, scopes: store.scopes.map((entry) => entry.scope), reviewBackend: github ? 'github' : 'internal', repository: github?.repository ?? options.repository, group: options.group }));
 	tool('sync_status', 'Preview Git state and the canonical files eligible for saving. Runtime files, indexes, credentials, and native agent state are excluded.', {}, true, () => gitPreview(store));
-	if (!options.allowTool || options.allowTool('sync')) server.registerTool('sync', { description: 'Synchronize the configuration Git repository when the user requests it. save commits and pushes; sync commits, pulls with rebase, then pushes; pull and push only transfer existing commits. Commit messages are generated unless supplied. Use sync_status to inspect eligible files.',
-		inputSchema: { action: z.enum(['init', 'save', 'pull', 'push', 'sync']), confirmed: z.literal(true).optional(), message: z.string().min(1).max(1000).optional() },
-		annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true }
-	}, async ({ action, message }) => {
-		try { return { content: [{ type: 'text' as const, text: JSON.stringify(syncGit(store, action, message)) }] }; }
-		catch (error) { return { isError: true, content: [{ type: 'text' as const, text: error instanceof Error ? error.message : String(error) }] }; }
-	});
+	for (const name of ['brain_sync', 'brain_flush', 'sync', 'flush']) {
+		if (options.allowTool && !options.allowTool(name)) continue;
+		server.registerTool(name, { description: 'When the user explicitly asks "brain sync" or "brain flush", commit and push canonical Brain changes to its configuration repository. Messages are generated. Report errors and unsynced changes to the user. This does not commit project source code.',
+			inputSchema: { action: z.enum(['init', 'save', 'pull', 'push', 'sync']).default('sync'), confirmed: z.literal(true).optional(), message: z.string().min(1).max(1000).optional() },
+			annotations: { readOnlyHint: false, destructiveHint: false, openWorldHint: true }
+		}, async ({ action, message }) => {
+			try {
+				if (options.sync && !['save', 'sync'].includes(action)) throw new Error('Remote Brain supports sync/save/flush only.');
+				const result = options.sync ? await options.sync(message) : syncGit(store, action, message);
+				return { content: [{ type: 'text' as const, text: JSON.stringify(result) }] };
+			} catch (error) { return { isError: true, content: [{ type: 'text' as const, text: error instanceof Error ? error.message : String(error) }] }; }
+		});
+	}
 	tool('get_context', 'Retrieve relevant constraints and knowledge before substantial work. Check omitted; explicitly fetch required knowledge if the budget excluded it.', {
 		task: z.string().max(10000), files: z.array(z.string()).max(100).optional(), symbols: z.array(z.string()).max(100).optional()
 	}, false, ({ task, files, symbols }) => store.context(task, files, symbols));
