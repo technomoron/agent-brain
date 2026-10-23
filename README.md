@@ -49,7 +49,7 @@ Operational systemd and Windows installation scripts remain in agent-run, which 
 
 ## MCP-owned skills
 
-The server bundles `brain-consolidate`, `brain-import`, `brain-memory`, `code-review`, `todo-manager`, `git-workflow`, and `package-integrity-check` under `skills/`.
+The server bundles `brain-consolidate`, `brain-import`, `brain-memory`, `code-review`, `todo-manager`, `git-workflow`, `package-integrity-check`, and `node-cleanup` under `skills/`.
 
 All bundled skills are served directly by `list_skills` and `get_skill`; no configuration copy is required. Explicit global, pool, or project overrides remain supported. Legacy `brain-review`, `code-review-organizer`, `review-items`, `commit-workflow`, and `release-package-check` copies are excluded from MCP discovery. Remove these copies from configurations. Route review callers to `code-review`, Git callers to `git-workflow`, and package checks to `package-integrity-check`.
 

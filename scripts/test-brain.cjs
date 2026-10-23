@@ -1355,7 +1355,7 @@ test('compression uses the built-in skill when no catalog copy exists', (t) => {
 test('bundled workflows need no configuration copies and preserve explicit overrides', (t) => {
 	const env = environment(t);
 	const store = env.store(env.cwd);
-	for (const name of ['brain-consolidate', 'brain-import', 'brain-memory', 'code-review', 'todo-manager', 'git-workflow', 'package-integrity-check']) {
+	for (const name of ['brain-consolidate', 'brain-import', 'brain-memory', 'code-review', 'todo-manager', 'git-workflow', 'package-integrity-check', 'node-cleanup']) {
 		const skill = getSkill(store, name);
 		assert.equal(skill.scope, 'global');
 		assert.ok(skill.content.length > 0, name);

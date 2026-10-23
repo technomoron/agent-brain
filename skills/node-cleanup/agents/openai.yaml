@@ -1,0 +1,4 @@
+interface:
+  display_name: "Node Cleanup"
+  short_description: "Audit npm and pnpm global installs"
+  default_prompt: "Use $node-cleanup to audit and clean global Node tooling and npm/pnpm package state."

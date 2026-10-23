@@ -1,5 +1,6 @@
 Unreleased (2026-10-23)
 -----------------------
+* Serve node-cleanup from the agent-brain bundle and remove the pnmp typo rule.
 * Bundle package-integrity-check in place of release-package-check.
 * Bundle Git operations and commit policy in git-workflow.
 * Load all Brain workflows directly from the package instead of installing configuration copies.
