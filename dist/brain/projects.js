@@ -41,6 +41,8 @@ function initializeBrain(configRoot, cwd) {
                 initializeScopeDirectories(store, directory);
         });
         for (const [name, skill] of Object.entries((0, built_in_skills_1.readBuiltInSkills)())) {
+            if (name === 'code-review')
+                continue; // Served directly from the bundle; local files are explicit overrides.
             const destination = store.safePath('global', 'skills', name, 'SKILL.md');
             if (!fs.existsSync(destination))
                 store.atomicWrite(destination, `---\n${(0, yaml_1.stringify)({ name, description: skill.description })}---\n\n${skill.content}\n`);

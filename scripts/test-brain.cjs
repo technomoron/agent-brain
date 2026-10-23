@@ -1352,15 +1352,28 @@ test('compression uses the built-in skill when no catalog copy exists', (t) => {
 test('initialization installs all MCP-owned workflows and preserves customizations', (t) => {
 	const env = environment(t);
 	const store = env.store(env.cwd);
-	for (const name of ['brain-consolidate', 'brain-import', 'brain-memory', 'brain-review', 'code-review-organizer', 'review-items', 'todo-manager']) {
+	for (const name of ['brain-consolidate', 'brain-import', 'brain-memory', 'code-review', 'todo-manager']) {
 		const skill = getSkill(store, name);
 		assert.equal(skill.scope, 'global');
 		assert.ok(skill.content.length > 0, name);
 	}
-	const file = path.join(env.root, 'global', 'skills', 'review-items', 'SKILL.md');
-	fs.appendFileSync(file, '\nLocal review policy.\n');
+	const file = path.join(env.root, 'global', 'skills', 'code-review', 'SKILL.md');
+	assert.equal(fs.existsSync(file), false);
+	assert.equal(getSkill(store, 'code-review').source, 'builtin:code-review');
+	assert.ok(!listSkills(store).some((skill) => ['brain-review', 'code-review-organizer', 'review-items'].includes(skill.name)));
+	fs.mkdirSync(path.dirname(file), { recursive: true });
+	fs.writeFileSync(file, '---\nname: code-review\ndescription: Local review policy\n---\nLocal review policy.\n');
 	initializeBrain(env.root, env.cwd);
-	assert.match(getSkill(store, 'review-items').content, /Local review policy/);
+	assert.match(getSkill(store, 'code-review').content, /Local review policy/);
+	fs.unlinkSync(file);
+	assert.equal(getSkill(store, 'code-review').source, 'builtin:code-review');
+	const project = env.project('review-override');
+	const local = path.join(project.directory, 'skills', 'code-review', 'SKILL.md');
+	fs.mkdirSync(path.dirname(local), { recursive: true });
+	fs.writeFileSync(local, '---\nname: code-review\ndescription: Project review\nextends: global:code-review\n---\nProject review policy.\n');
+	const extended = getSkill(env.store(project.cwd), 'code-review');
+	assert.match(extended.content, /GitHub Issues/);
+	assert.match(extended.content, /Project review policy/);
 	fs.unlinkSync(path.join(env.root, 'global', 'skills', 'brain-import', 'SKILL.md'));
 	initializeBrain(env.root, env.cwd);
 	assert.match(getSkill(store, 'brain-import').content, /provenance/);

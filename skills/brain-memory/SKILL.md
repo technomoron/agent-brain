@@ -54,7 +54,7 @@ Search before writing so you do not create a near-duplicate. When existing knowl
 
 Choose the knowledge type by content: preferences for user choices, constraints for requirements, conventions for established practices, decisions for confirmed choices, specs for confirmed specifications, reviews for review findings, memory for durable reference and history, and observations for code-derived facts or deductions. Rules use type=rule. Only explicit user instructions or confirmation justify authority=user; an import request alone does not make source documents authoritative. MCP maps the singular type to the matching storage directory, so pass scope and type rather than choosing a file path.
 
-Review findings also need a severity, and the store assigns their C1, H1, M1, L1 label. The code-review-organizer skill covers that workflow.
+Use the bundled code-review skill for code reviews and saved findings. Track new findings in GitHub Issues; do not create duplicate brain knowledge records.
 
 Use todo tools for tasks and preserve their external identities. Reusable workflows belong in skills/<name>/SKILL.md; actual reusable templates belong in templates/. These are separate from knowledge items, and remember does not install skills or templates. Keep source references and distinguish current behavior from historical notes and planned features. Keep project-specific content in project scope; default is only for work outside configured projects.
 

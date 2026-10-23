@@ -54,10 +54,26 @@ async function createRemoteApi(configFile) {
     };
     const sessions = new apicore_server_1.JsonTokenStore(path.join(initial.runtime, 'sessions.json'));
     const credentials = new apicore_server_1.MemAuthStore({ passkeys: false, tokenStore: sessions });
+    const passwordHashes = new Map();
+    for (const user of initial.users) {
+        if (user.kind !== 'human' || user.disabled || !user.passwordEnv)
+            continue;
+        const stored = await credentials.userStore.createUser({ login: user.subject, email: user.subject + '@brain.invalid', password: secret(user.passwordEnv) });
+        passwordHashes.set(user.passwordEnv, credentials.getUserPasswordHash(stored));
+    }
     class ConfigAuth extends apicore_server_1.BaseAuthAdapter {
         async getUser(identifier) { return policy().users.find((u) => !u.disabled && (u.subject === String(identifier) || u.login === identifier)) ?? null; }
         getUserId(user) { return user.subject; }
-        getUserPasswordHash(user) { return user.kind === 'human' && user.passwordHashEnv ? secret(user.passwordHashEnv) : ''; }
+        // Resolve the configured password to the existing bcrypt verifier.
+        getUserPasswordHash(user) {
+            if (user.kind !== 'human')
+                return '';
+            if (user.passwordHashEnv)
+                return secret(user.passwordHashEnv);
+            if (user.passwordEnv && passwordHashes.has(user.passwordEnv))
+                return passwordHashes.get(user.passwordEnv);
+            throw new Error('Restart the remote server after changing password environment settings');
+        }
         filterUser(user) { return { subject: user.subject }; }
         verifyPassword(password, hash) { return credentials.verifyPassword(password, hash); }
         getClient(id) { return credentials.getClient(id); }

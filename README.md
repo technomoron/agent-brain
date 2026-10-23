@@ -49,11 +49,13 @@ Operational systemd and Windows installation scripts remain in agent-run, which 
 
 ## MCP-owned skills
 
-The server owns the Markdown sources under `skills/`: `brain-consolidate`, `brain-import`, `brain-memory`, `brain-review`, `code-review-organizer`, `review-items`, and `todo-manager`. These were extracted from the current external shared skill set on 2026-10-16. The project-specific consolidation copy was identical and is represented once.
+The server bundles `brain-consolidate`, `brain-import`, `brain-memory`, `code-review`, and `todo-manager` under `skills/`.
 
-Initialization reads these packaged sources and installs missing skills into the external global skill directory. Existing customized installations are preserved. Consolidation’s CLI fallback also reads its packaged Markdown source; there is no separate embedded copy of that workflow. The existing ordinary-conversation retrieval and task-authorization guards are retained in the packaged memory and task skills.
+`code-review` is served directly by `list_skills` and `get_skill`; no configuration copy is required. Explicit global, pool, or project overrides remain supported. Legacy `brain-review`, `code-review-organizer`, and `review-items` copies are excluded from MCP discovery. Remove these copies from configurations and update their callers to `code-review`.
 
-Keep MCP-owned skills and tools with this implementation. Independent reusable skills belong in the private catalog. The live configuration is unchanged by the source extraction; use initialization explicitly when installing missing packaged skills.
+The review workflow uses ordinary GitHub Issues through GitHub tools or `gh`. Brain supplies project context; GitHub owns issue identity, metadata, discussion and history. Existing `review_*` tools remain a compatibility API for earlier installations, not a requirement of the bundled skill.
+
+Initialization installs missing copies of the other packaged workflows and preserves customizations. Consolidation's CLI fallback reads its packaged source.
 
 ## Shared skill catalog
 
@@ -81,8 +83,11 @@ Create each repository's separate configuration root using `agent-brain init
 --configdir <root> --cwd <checkout>`. Run the server as a dedicated OS user with a
 private runtime directory (0700). Supply two different random signing secrets of
 at least 32 characters through `MCP_OAUTH_ACCESS_SECRET` and
-`MCP_OAUTH_REFRESH_SECRET`. Human passwords are bcrypt hashes supplied through the
-configured environment variables; optional TOTP secrets are base32 values enrolled
+`MCP_OAUTH_REFRESH_SECRET`. Set each human user's `passwordEnv` to a plaintext
+password environment variable, or `passwordHashEnv` to a bcrypt hash variable;
+choose one. Plaintext passwords are hashed in memory at startup. Keep the
+environment file private and restart after password changes.
+Optional TOTP secrets are base32 values enrolled
 in the user's authenticator. Enrolment and password management are administrator
 operations. Service accounts use confidential client secrets from the environment.
 Never put credentials in source control or client command arguments.
@@ -151,9 +156,7 @@ GitHub offers no atomic issue-create idempotency or conditional PATCH here: a
 crash between creation and saving the key, or separate MCP instances creating the
 same finding simultaneously, can still require manual reconciliation. Re-read
 before writes; revision checks cannot eliminate races with concurrent GitHub edits.
-Old internal findings are not migrated automatically. Packaged review skills
-select their backend through `brain_status`; existing customized installations
-must adopt that backend-selection section before using GitHub reviews.
+Old internal findings are not migrated automatically. This compatibility adapter uses its own managed metadata format; the bundled `code-review` skill instead uses ordinary GitHub issues directly.
 
 The reusable private skill repository is separate from MCP-owned workflows.
 Automatic catalog cloning/polling and OAuth login in the local stdio bridge are
@@ -649,9 +652,7 @@ including template. Nunjucks variables remain available. Symlinks are rejected,
 and each file is limited to 1 MiB. Move snippets and skill overrides stored
 elsewhere into these directories before rendering or loading those skills.
 
-The installed `brain-memory`, `brain-consolidate`, `brain-review`, and `todo-manager`
-skills describe retrieval, persistence, consolidation, review learning, and task workflows. Review records use
-the knowledge tools and remain inferred unless confirmed by the user.
+The packaged memory, consolidation, review and task skills document their workflows. New review findings belong in GitHub Issues through `code-review`.
 
 ### Tasks and connectors
 

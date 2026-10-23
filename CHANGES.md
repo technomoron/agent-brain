@@ -1,3 +1,8 @@
+Unreleased (2026-10-23)
+-----------------------
+* Serve one bundled code-review workflow using ordinary GitHub issues, with optional local overrides.
+* Support plaintext or hashed remote login passwords.
+
 Version 0.1.1 (2026-10-22)
 --------------------------
 * Allow independent repositories without a pool in configuration deployment and Git sync.

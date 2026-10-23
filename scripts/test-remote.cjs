@@ -80,3 +80,49 @@ test('central pools prevent narrow tokens modifying shared scopes',async()=>{
 
  }finally{await service?.close();fs.rmSync(root,{recursive:true,force:true});for(const name of ['MCP_TEST_CLIENT_SECRET','MCP_OAUTH_ACCESS_SECRET','MCP_OAUTH_REFRESH_SECRET'])delete process.env[name];}
 });
+
+test('human OAuth login accepts plaintext environment passwords and existing bcrypt hashes', async () => {
+ const {createHash}=require('node:crypto');
+ const {MemAuthStore}=require('@technomoron/apicore-server');
+ const {readRemoteConfig}=require('../dist/brain/remote-policy');
+ const root=fs.mkdtempSync(path.join(os.tmpdir(),'brain-password-'));
+ const names=['MCP_TEST_PASSWORD','MCP_TEST_PASSWORD_HASH','MCP_OAUTH_ACCESS_SECRET','MCP_OAUTH_REFRESH_SECRET'];
+ const previous=names.map(name=>process.env[name]);
+ let service;
+ try {
+  process.env.MCP_TEST_PASSWORD='test password with spaces';
+  process.env.MCP_OAUTH_ACCESS_SECRET='access'.repeat(8);
+  process.env.MCP_OAUTH_REFRESH_SECRET='refresh'.repeat(8);
+  const authStore=new MemAuthStore({passkeys:false});
+  const stored=await authStore.userStore.createUser({login:'human',email:'human@example.com',password:process.env.MCP_TEST_PASSWORD});
+  process.env.MCP_TEST_PASSWORD_HASH=authStore.getUserPasswordHash(stored);
+  const c=config(root);c.repositories=[];c.users=[{subject:'human',login:'human@example.com',passwordEnv:'MCP_TEST_PASSWORD'}];
+  c.clients=[{id:'desktop',kind:'public',redirectUris:['http://127.0.0.1:8123/callback'],repos:['technomoron/*'],permissions:['read']}];
+  c.access=[{subject:'human',repos:['technomoron/*'],permissions:['read']}];
+  const file=path.join(root,'remote.json');
+  for(const mode of ['plaintext','hash']) {
+   if(mode==='hash'){delete c.users[0].passwordEnv;c.users[0].passwordHashEnv='MCP_TEST_PASSWORD_HASH';}
+   fs.writeFileSync(file,JSON.stringify(c));
+   service=await createRemoteApi(file);const app=service.api.fastify;
+   for(const password of ['wrong password',process.env.MCP_TEST_PASSWORD]) {
+    const params=new URLSearchParams({response_type:'code',client_id:'desktop',redirect_uri:c.clients[0].redirectUris[0],scope:'read repo:technomoron/*',resource:c.resource,code_challenge:createHash('sha256').update('a'.repeat(43)).digest('base64url'),code_challenge_method:'S256'});
+    const page=await app.inject({method:'GET',url:'/oauth/authorize?'+params});
+    assert.equal(page.statusCode,200,page.body);
+    const hidden=name=>new RegExp('name="'+name+'" value="([^"]+)"').exec(page.body)[1];
+    const cookie=page.cookies.map(({name,value})=>name+'='+value).join('; ');
+    const login=await app.inject({method:'POST',url:'/oauth/login',headers:{cookie,'content-type':'application/x-www-form-urlencoded'},payload:new URLSearchParams({request:hidden('request'),csrf:hidden('csrf'),login:'human@example.com',password}).toString()});
+    assert.equal(login.statusCode,password==='wrong password'?401:302,login.body);
+   }
+   await service.close();service=undefined;
+  }
+  c.users[0].passwordEnv='MCP_TEST_PASSWORD';
+  fs.writeFileSync(file,JSON.stringify(c));assert.throws(()=>readRemoteConfig(file),/not both/);
+  delete c.users[0].passwordHashEnv;delete c.users[0].passwordEnv;
+  fs.writeFileSync(file,JSON.stringify(c));assert.throws(()=>readRemoteConfig(file),/require passwordEnv or passwordHashEnv/);
+  c.users[0].passwordEnv='MCP_TEST_MISSING_PASSWORD';
+  fs.writeFileSync(file,JSON.stringify(c));await assert.rejects(createRemoteApi(file),/Missing environment variable MCP_TEST_MISSING_PASSWORD/);
+ } finally {
+  await service?.close();fs.rmSync(root,{recursive:true,force:true});
+  names.forEach((name,index)=>{if(previous[index]===undefined)delete process.env[name];else process.env[name]=previous[index];});
+ }
+});

@@ -28,6 +28,7 @@ const coreSkills = new Set([
 	'brain-memory',
 	'brain-import',
 	'brain-consolidate',
+	'code-review',
 	'brain-review',
 	'code-review-organizer',
 	'review-items',

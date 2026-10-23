@@ -22,7 +22,7 @@ exports.remoteConfigSchema = zod_1.z.object({
     accessSecretEnv: envName.default('MCP_OAUTH_ACCESS_SECRET'), refreshSecretEnv: envName.default('MCP_OAUTH_REFRESH_SECRET'),
     listen: zod_1.z.object({ host: zod_1.z.literal('127.0.0.1').default('127.0.0.1'), port: zod_1.z.number().int().min(1).max(65535).default(3000), socket: absolute.optional() }).strict().default({ host: '127.0.0.1', port: 3000 }),
     users: zod_1.z.array(zod_1.z.object({ subject: zod_1.z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/), login: zod_1.z.string().min(1).max(200),
-        kind: zod_1.z.enum(['human', 'service']).default('human'), passwordHashEnv: envName.optional(), totpSecretEnv: envName.optional(), disabled: zod_1.z.boolean().default(false) }).strict()),
+        kind: zod_1.z.enum(['human', 'service']).default('human'), passwordEnv: envName.optional(), passwordHashEnv: envName.optional(), totpSecretEnv: envName.optional(), disabled: zod_1.z.boolean().default(false) }).strict()),
     clients: zod_1.z.array(zod_1.z.object({ id: zod_1.z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/), kind: zod_1.z.enum(['public', 'confidential', 'service']).default('public'),
         secretEnv: envName.optional(), subject: zod_1.z.string().optional(), redirectUris: zod_1.z.array(zod_1.z.string().url()).default([]),
         repos: zod_1.z.array(repositories_1.repositoryPattern).min(1), permissions: zod_1.z.array(exports.permission).min(1) }).strict()),
@@ -43,8 +43,10 @@ function readRemoteConfig(file) {
     for (const user of config.users) {
         if (config.users.some((other) => other.subject !== user.subject && other.subject === user.login))
             throw new Error('Logins must not alias another subject');
-        if (!user.disabled && user.kind === 'human' && !user.passwordHashEnv)
-            throw new Error('Human users require passwordHashEnv');
+        if (user.passwordEnv && user.passwordHashEnv)
+            throw new Error('Choose passwordEnv or passwordHashEnv, not both');
+        if (!user.disabled && user.kind === 'human' && !user.passwordHashEnv && !user.passwordEnv)
+            throw new Error('Human users require passwordEnv or passwordHashEnv');
     }
     for (const client of config.clients) {
         if (client.kind !== 'public' && !client.secretEnv)

@@ -4,6 +4,7 @@ exports.getSkills = getSkills;
 exports.listSkills = listSkills;
 exports.getSkill = getSkill;
 const path = require("node:path");
+const built_in_skills_1 = require("./built-in-skills");
 const zod_1 = require("zod");
 const store_1 = require("./store");
 const templates_1 = require("@technomoron/agent-run/dist/templates");
@@ -14,6 +15,7 @@ const metadata = zod_1.z.object({
     tags: zod_1.z.array(zod_1.z.string()).default([]),
     extends: zod_1.z.string().regex(/^(?:global|pool):[a-zA-Z0-9][a-zA-Z0-9._-]*$/).optional()
 });
+// Resolve bundled review instructions and scope-specific skill overrides.
 function getSkills(store) {
     const profile = store.profile ?? 'default';
     const directory = store.scopeDirectory(store.profile ? 'project' : 'default');
@@ -22,11 +24,17 @@ function getSkills(store) {
     const skillEnv = (0, templates_1.createSkillNunjucksEnv)(store.configRoot, directory, undefined, store.pool);
     const skills = new Map();
     const parentSkills = new Map();
+    const bundledReview = { name: 'code-review', ...(0, built_in_skills_1.readBuiltInSkill)('code-review'),
+        tags: [], scope: 'global', source: 'builtin:code-review' };
+    skills.set(bundledReview.name, bundledReview);
+    parentSkills.set('global:code-review', bundledReview);
     for (const { scope, directory } of store.scopes) {
         for (const file of store.files(path.join(directory, 'skills')).filter((file) => path.basename(file) === 'SKILL.md')) {
             const text = skillEnv.render(path.relative(store.configRoot, file), context);
             const document = (0, store_1.readMarkdown)(text);
             const parsed = metadata.parse(document.metadata);
+            if (['brain-review', 'code-review-organizer', 'review-items'].includes(parsed.name))
+                continue;
             if (path.basename(path.dirname(file)) !== parsed.name)
                 throw new Error(`Skill name must match directory: ${file}`);
             let content = document.content;
