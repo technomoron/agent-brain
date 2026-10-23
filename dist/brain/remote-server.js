@@ -164,10 +164,14 @@ async function createRemoteApi(configFile) {
                 store.close();
                 return reply.code(503).send({ error: 'Repository profile changed; restore its registration before continuing' });
             }
+            // Require write access to every repository affected by a shared scope.
             const canWriteScope = (scope) => {
                 const scopes = claims.scope.split(' ');
                 if (scope === 'project')
                     return permissions.has('write');
+                if (scope === 'global' && !initial.dataRoot)
+                    return initial.repositories.filter(member => repo.group ? member.group === repo.group : member.id === repo.id)
+                        .every(member => (0, remote_policy_1.repositoryPermissions)(policy(), claims.sub, claims.client_id, scopes, member.id).has('write'));
                 if (scope === 'global')
                     return scopes.includes('repo:*') && (0, remote_policy_1.allowedGrant)(policy(), claims.sub, claims.client_id, ['read', 'write', 'repo:*']);
                 return !!repo.group && initial.repositories.filter(member => member.group === repo.group).every(member => (0, remote_policy_1.repositoryPermissions)(policy(), claims.sub, claims.client_id, scopes, member.id).has('write'));
@@ -196,12 +200,7 @@ async function createRemoteApi(configFile) {
                         child.stdin?.end(JSON.stringify({ ...initial.gitSync, dataRoot: initial.dataRoot, scopes, reviews: permissions.has('review'), message }));
                     });
                 }, repository, group: repo.group, repositories: catalog, allowScopeWrite: (scope) => {
-                    if (!initial.dataRoot || scope === 'project')
-                        return true;
-                    const scopes = claims.scope.split(' ');
-                    if (scope === 'global')
-                        return scopes.includes('repo:*') && (0, remote_policy_1.allowedGrant)(policy(), claims.sub, claims.client_id, ['read', 'write', 'repo:*']);
-                    return scope === 'pool' && initial.repositories.filter((member) => member.group === repo.group).every((member) => (0, remote_policy_1.repositoryPermissions)(policy(), claims.sub, claims.client_id, scopes, member.id).has('write'));
+                    return scope === 'project' || (scope === 'default' ? !initial.dataRoot : canWriteScope(scope));
                 }, allowTool: (name) => { const required = (0, remote_policy_1.toolPermission)(name); return required !== null && permissions.has(required); } });
         }
         const transport = new streamableHttp_js_1.StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });

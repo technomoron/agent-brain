@@ -1408,3 +1408,35 @@ test('global, pool and repository scopes share knowledge and override skills wit
  for(const [scope,text] of [['global','base'],['pool','customer'],['project','repository']])one.atomicWrite(path.join(one.scopeDirectory(scope),'skills','example','SKILL.md'),`---\nname: example\ndescription: Example\n---\n${text}\n`);
  assert.equal(getSkill(one,'example').content,'repository');assert.equal(getSkill(two,'example').content,'customer');assert.equal(getSkill(other,'example').content,'base');
 });
+
+
+test('local Git saves skill support files and skill/task deletions', (t) => {
+ const env=environment(t), store=env.store(env.cwd);
+ syncGit(store,'init');connectRemote(env);
+ const git=(args)=>{const r=spawnSync('git',['-C',env.root,...args],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);return r.stdout;};
+ git(['config','user.name','Test']);git(['config','user.email','test@example.invalid']);
+ const skill='global/skills/example/SKILL.md', script='global/skills/example/helper.py';
+ store.atomicWrite(skill,'---\nname: example\ndescription: Example\n---\nRun helper.py');
+ store.atomicWrite(script,'print(1)');
+ const task=addTodo(store,{scope:'default',title:'Remove this task'});
+ const taskFile=`default/todo/${task.id}.md`;
+ assert(gitPreview(store).files.includes(script));
+ syncGit(store,'save');
+ assert.equal(git(['show',`HEAD:${script}`]),'print(1)');
+ store.atomicWrite(script,'print(2)');syncGit(store,'save');
+ assert.equal(git(['show',`HEAD:${script}`]),'print(2)');
+ for(const name of [skill,script,taskFile])fs.unlinkSync(path.join(env.root,name));
+ const preview=gitPreview(store).files;
+ for(const name of [skill,script,taskFile])assert(preview.includes(name),name);
+ syncGit(store,'save');
+ assert.equal(git(['status','--porcelain','--untracked-files=no']),'');
+ assert.equal(git(['ls-tree','-r','--name-only','HEAD','--',skill,script,taskFile]),'');
+});
+
+test('Windows ACL helper ships at the compiled module location', () => {
+ const modulePath=require.resolve('../dist/brain/windows-pipe');
+ const helper=path.resolve(path.dirname(modulePath),'../../ops/brain-pipe-security.ps1');
+ assert(fs.statSync(helper).isFile());
+ assert(JSON.parse(fs.readFileSync(path.resolve(__dirname,'../package.json'),'utf8')).files.includes('ops/'));
+ assert(fs.readFileSync(helper,'utf8').includes('SetAccessRuleProtection'));
+});

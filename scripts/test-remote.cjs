@@ -26,6 +26,17 @@ test('declared groups share common knowledge while project knowledge and token a
   const app=service.api.fastify;const grant=await app.inject({method:'POST',url:'/oauth/token',headers:{'content-type':'application/x-www-form-urlencoded'},payload:new URLSearchParams({grant_type:'client_credentials',client_id:'service',client_secret:process.env.MCP_TEST_CLIENT_SECRET,scope:'read repo:technomoron/a',resource:c.resource}).toString()});assert.equal(grant.statusCode,200,grant.body);
   const call=repo=>app.inject({method:'POST',url:'/mcp',headers:{authorization:'Bearer '+grant.json().access_token,'x-agent-repository':repo,accept:'application/json, text/event-stream'},payload:{jsonrpc:'2.0',id:1,method:'tools/call',params:{name:'brain_status',arguments:{}}}});
   const status=await call('technomoron/a');assert.equal(status.statusCode,200);assert.equal(JSON.parse(status.json().result.content[0].text).group,'agent-tools');assert.equal((await call('technomoron/b')).statusCode,403);
+  async function token(scope){const r=await app.inject({method:'POST',url:'/oauth/token',headers:{'content-type':'application/x-www-form-urlencoded'},payload:new URLSearchParams({grant_type:'client_credentials',client_id:'service',client_secret:process.env.MCP_TEST_CLIENT_SECRET,scope,resource:c.resource}).toString()});assert.equal(r.statusCode,200,r.body);return r.json().access_token;}
+  async function write(token,name,args){const r=await app.inject({method:'POST',url:'/mcp',headers:{authorization:'Bearer '+token,'x-agent-repository':'technomoron/a',accept:'application/json, text/event-stream'},payload:{jsonrpc:'2.0',id:1,method:'tools/call',params:{name,arguments:args}}});assert.equal(r.statusCode,200,r.body);return r.json().result;}
+  const narrow=await token('read write repo:technomoron/a');
+  const input={scope:'global',type:'memory',authority:'user',title:'Shared scope test',content:'Must require all members'};
+  assert.equal((await write(narrow,'remember',input)).isError,true);
+  assert.equal((await write(narrow,'remember',{...input,scope:'project'})).isError,undefined);
+  c.access=[{subject:'bot',repos:['technomoron/*'],permissions:['read','write']}];fs.writeFileSync(file,JSON.stringify(c));
+  const full=await token('read write repo:technomoron/*');
+  const created=await write(full,'remember',input);assert.equal(created.isError,undefined);
+  const item=JSON.parse(created.content[0].text);
+  for(const [name,args] of [['amend_knowledge',{id:item.id,revision:item.revision,changes:{title:'Denied'}}],['deprecate_knowledge',{id:item.id,revision:item.revision}],['promote',{id:item.id,revision:item.revision,scope:'project',confirmed:true}]])assert.equal((await write(narrow,name,args)).isError,true);
  }finally{await service?.close();fs.rmSync(root,{recursive:true,force:true});for(const name of ['MCP_TEST_CLIENT_SECRET','MCP_OAUTH_ACCESS_SECRET','MCP_OAUTH_REFRESH_SECRET'])delete process.env[name];}
 });
 test('discovery before repository selection lists only projects allowed by user, client and token',async()=>{

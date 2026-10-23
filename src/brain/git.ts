@@ -26,6 +26,7 @@ export function gitStatus(store: BrainStore): { state: string; files: string[]; 
 		branch: git(store.configRoot, ['branch', '--show-current']) };
 }
 
+// Collect canonical files and tracked removals eligible for local Git sync.
 function syncableFiles(store: BrainStore): string[] {
 	const folders = new Set([...Object.values(knowledgeDirectories), 'skills', 'todo', 'notes']);
 	const roots = [path.join(store.configRoot, 'global'), path.join(store.configRoot, 'default')];
@@ -33,7 +34,7 @@ function syncableFiles(store: BrainStore): string[] {
 	if (store.profile && !store.profile.startsWith('projects/')) roots.push(store.scopeDirectory('project'));
 	const files: string[] = [];
 	for (const root of roots) {
-		for (const folder of folders) files.push(...store.files(path.join(root, folder)));
+		for (const folder of folders) files.push(...store.files(path.join(root, folder), { includeAllFiles: folder === 'skills' }));
 		files.push(...store.files(path.join(root, 'templates'), { includeAllFiles: true }));
 		for (const name of ['config.yaml', 'project.md', 'review-history.jsonl', 'review-counters.json', 'knowledge-history.jsonl']) {
 			const file = store.safePath(root, name);
@@ -41,7 +42,7 @@ function syncableFiles(store: BrainStore): string[] {
 		}
 	}
 	if (fs.existsSync(path.join(store.configRoot, '.git'))) {
-		const removable = roots.flatMap((root) => ['templates', 'notes', ...Object.values(knowledgeDirectories)].map((folder) => path.relative(store.configRoot, path.join(root, folder))));
+		const removable = roots.flatMap((root) => ['templates', ...folders].map((folder) => path.relative(store.configRoot, path.join(root, folder))));
 		const deleted = git(store.configRoot, ['ls-files', '--deleted', '-z', '--', ...removable]).split('\0').filter(Boolean);
 		files.push(...deleted.map((file) => store.safePath(file)));
 	}

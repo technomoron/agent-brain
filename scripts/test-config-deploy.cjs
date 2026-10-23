@@ -110,6 +110,25 @@ test('real Git export commits, pushes, avoids duplicate commits and retains live
  const opts={catalog,dataRoot,state,scopes:['projects/owner/repo']};
  const first=exportSync(opts);assert.equal(first.files,1);assert(first.commit);assert.equal(git(remote,'show','main:'+name),'Brain change');
  assert.equal(exportSync(opts).files,0);
+ // Recover acknowledgement lost after a successful push.
+ const exportFile=path.join(state,'export-baseline.json');
+ const journal=JSON.parse(fs.readFileSync(exportFile,'utf8'));
+ journal.pending=journal.committed;delete journal.committed;
+ fs.writeFileSync(exportFile,JSON.stringify(journal));
+ assert.equal(exportSync(opts).files,0);
+ assert(JSON.parse(fs.readFileSync(exportFile,'utf8')).committed);
+ // Reversals and deletions before deployment must reach Git.
+ write(dataRoot,name,'Original');assert.equal(exportSync(opts).files,1);
+ assert.equal(git(remote,'show','main:'+name),'Original');
+ const added='projects/owner/repo/memory/new.md';
+ write(dataRoot,added,'New knowledge');assert.equal(exportSync(opts).files,1);
+ fs.unlinkSync(path.join(dataRoot,added));assert.equal(exportSync(opts).files,1);
+ assert.equal(git(remote,'ls-tree','--name-only','main','--',added),'');
+ // Narrow exports must not acknowledge other scopes or overwrite Git-only edits.
+ const shared='pools/customer/memory/shared.md';write(dataRoot,shared,'Shared knowledge');
+ assert.equal(exportSync(opts).files,0);
+ assert.equal(exportSync({...opts,scopes:['pools/customer']}).files,1);
+ assert.equal(git(remote,'show','main:'+shared),'Shared knowledge');
  git(catalog,'pull','--ff-only');write(state,'baseline.json',JSON.stringify({files:readSnapshot(catalog,selection)}));
  write(dataRoot,name,'Later change');write(remote,'hooks/pre-receive','#!/bin/sh\nexit 1\n');fs.chmodSync(path.join(remote,'hooks/pre-receive'),0o755);
  assert.throws(()=>exportSync(opts),/pre-receive hook declined/);assert.equal(fs.readFileSync(path.join(dataRoot,name),'utf8'),'Later change');

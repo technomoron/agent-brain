@@ -30,6 +30,7 @@ function gitStatus(store) {
     return { state: conflicts.length ? 'conflicted' : files.length ? 'dirty' : 'clean', files, conflicts,
         branch: git(store.configRoot, ['branch', '--show-current']) };
 }
+// Collect canonical files and tracked removals eligible for local Git sync.
 function syncableFiles(store) {
     const folders = new Set([...Object.values(store_1.knowledgeDirectories), 'skills', 'todo', 'notes']);
     const roots = [path.join(store.configRoot, 'global'), path.join(store.configRoot, 'default')];
@@ -39,7 +40,7 @@ function syncableFiles(store) {
     const files = [];
     for (const root of roots) {
         for (const folder of folders)
-            files.push(...store.files(path.join(root, folder)));
+            files.push(...store.files(path.join(root, folder), { includeAllFiles: folder === 'skills' }));
         files.push(...store.files(path.join(root, 'templates'), { includeAllFiles: true }));
         for (const name of ['config.yaml', 'project.md', 'review-history.jsonl', 'review-counters.json', 'knowledge-history.jsonl']) {
             const file = store.safePath(root, name);
@@ -48,7 +49,7 @@ function syncableFiles(store) {
         }
     }
     if (fs.existsSync(path.join(store.configRoot, '.git'))) {
-        const removable = roots.flatMap((root) => ['templates', 'notes', ...Object.values(store_1.knowledgeDirectories)].map((folder) => path.relative(store.configRoot, path.join(root, folder))));
+        const removable = roots.flatMap((root) => ['templates', ...folders].map((folder) => path.relative(store.configRoot, path.join(root, folder))));
         const deleted = git(store.configRoot, ['ls-files', '--deleted', '-z', '--', ...removable]).split('\0').filter(Boolean);
         files.push(...deleted.map((file) => store.safePath(file)));
     }

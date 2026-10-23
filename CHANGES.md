@@ -1,5 +1,11 @@
-Unreleased (2026-10-23)
------------------------
+Version 0.1.2 (2026-10-23)
+--------------------------
+* Preserve repeated sync exports, reversals and deletions before deployment.
+* Sync skill support files and tracked skill/task deletions.
+* Enforce shared-scope write permissions for legacy repository groups.
+* Include the Windows pipe ACL helper in the package.
+* Create severity labels when the GitHub Severity field is unavailable.
+* Use fictional organization examples.
 * Bundle unslop and merge personal-memory guidance into brain-memory.
 * Serve node-cleanup from the agent-brain bundle and remove the pnmp typo rule.
 * Bundle package-integrity-check in place of release-package-check.

@@ -1,6 +1,7 @@
 'use strict';
 const fs = require('node:fs'), path = require('node:path');
 const { execFileSync } = require('node:child_process');
+const { createHash, randomUUID } = require('node:crypto');
 const { manifest, readSnapshot, fileContents, coreSkills } = require('./config-policy.cjs');
 
 // Only canonical data is exported. Client settings, server paths and policy stay in Git/admin configuration.
@@ -28,10 +29,27 @@ function sync({ dataRoot, catalog, state, scopes, reviews = true, message }) {
  }).trimEnd();
  try {
   const baseline = JSON.parse(fs.readFileSync(path.join(state, 'baseline.json'), 'utf8')).files;
+  const deployment = createHash('sha256').update(JSON.stringify(baseline)).digest('hex');
+  const exportFile = path.join(state, 'export-baseline.json');
+  let exported = fs.existsSync(exportFile) ? JSON.parse(fs.readFileSync(exportFile, 'utf8')) : {};
+  if (exported.deployment !== deployment) exported = { deployment };
+  const saveExport = () => {
+   const temporary = exportFile + '.' + randomUUID();
+   try { fs.writeFileSync(temporary, JSON.stringify(exported), { flag: 'wx', mode: 0o600 }); fs.renameSync(temporary, exportFile); }
+   finally { fs.rmSync(temporary, { force: true }); }
+  };
   const origin = git(catalog, ['remote', 'get-url', 'origin']);
   const exports = path.join(state, 'exports'); fs.mkdirSync(exports, { recursive: true, mode: 0o700 });
   checkout = fs.mkdtempSync(path.join(exports, 'sync-'));
   git(catalog, ['clone', '--quiet', '--single-branch', '--branch', 'main', '--', origin, checkout]);
+  // Recover a successful push even if its writer crashed before acknowledging it.
+  if (exported.pending) {
+   let pushed = false;
+   try { git(checkout, ['merge-base', '--is-ancestor', exported.pending.commit, 'HEAD']); pushed = true; } catch {}
+   if (pushed) exported.committed = exported.pending;
+   delete exported.pending;
+   saveExport();
+  }
   const selection = manifest(JSON.parse(fs.readFileSync(path.join(checkout, '.brain-deploy.json'), 'utf8')));
   const allowed = new Set(['global', ...selection.pools.map(p => 'pools/' + p), ...selection.repositories.map(r => 'projects/' + r.id)]);
   if (!scopes.length || scopes.some(s => !allowed.has(s))) throw Error('Sync scope is not registered in the configuration repository');
@@ -43,7 +61,7 @@ function sync({ dataRoot, catalog, state, scopes, reviews = true, message }) {
   try { fs.writeSync(fd, String(process.pid)); live = readSnapshot(dataRoot, selection, { required: false }); }
   finally { fs.closeSync(fd); fs.unlinkSync(writeLock); }
   const remote = readSnapshot(checkout, selection);
-  const plan = exportPlan(baseline, live, remote, scopes, reviews);
+  const plan = exportPlan(exported.committed?.files ?? baseline, live, remote, scopes, reviews);
   if (plan.conflicts.length) throw Error('Brain/Git conflict; live changes retained. Reconcile: ' + plan.conflicts.join(', '));
   const names = Object.keys(plan.changes);
   for (const [name, value] of Object.entries(plan.changes)) {
@@ -56,8 +74,19 @@ function sync({ dataRoot, catalog, state, scopes, reviews = true, message }) {
    git(checkout, ['add', '--', ...names]);
    git(checkout, ['-c', 'user.name=' + git(catalog, ['config', 'user.name']), '-c', 'user.email=' + git(catalog, ['config', 'user.email']), 'commit', '-m', message ?? `Save Brain knowledge (${names.length} ${names.length === 1 ? 'file' : 'files'})`]);
    commit = git(checkout, ['rev-parse', 'HEAD']);
+   const files = { ...(exported.committed?.files ?? baseline) };
+   for (const [name, value] of Object.entries(plan.changes)) {
+    if (value === null) delete files[name];
+    else files[name] = value;
+   }
+   // Keep the prior baseline until Git confirms the pending commit reached main.
+   exported.pending = { commit, files };
+   saveExport();
    // Never force. A concurrent Git push is reported and the next sync starts from fresh main.
    git(checkout, ['push', 'origin', 'HEAD:refs/heads/main']);
+   exported.committed = exported.pending;
+   delete exported.pending;
+   saveExport();
   }
   fs.rmSync(checkout, { recursive: true, force: true }); checkout = undefined;
   return { state: 'synced', files: names.length, commit, steps: [names.length ? 'Brain changes committed and pushed.' : 'No Brain changes to push.'] };

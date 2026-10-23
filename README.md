@@ -747,6 +747,7 @@ not identify Brain as the target. Agents still need a user request or standing
 authorization to sync.
 
 Saving includes Markdown knowledge, skills, tasks, project metadata, and `.gitignore`.
+Skill support files and tracked skill/task deletions are included.
 It also includes all regular files under each scope's `templates/` directory,
 including nested Nunjucks templates and supporting files. Template additions,
 edits, and deletions are synced; symlinks are rejected.
