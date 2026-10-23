@@ -49,9 +49,9 @@ Operational systemd and Windows installation scripts remain in agent-run, which 
 
 ## MCP-owned skills
 
-The server bundles `brain-consolidate`, `brain-import`, `brain-memory`, `code-review`, and `todo-manager` under `skills/`.
+The server bundles `brain-consolidate`, `brain-import`, `brain-memory`, `code-review`, `todo-manager`, `git-workflow`, and `package-integrity-check` under `skills/`.
 
-All bundled skills are served directly by `list_skills` and `get_skill`; no configuration copy is required. Explicit global, pool, or project overrides remain supported. Legacy `brain-review`, `code-review-organizer`, and `review-items` copies are excluded from MCP discovery. Remove these copies from configurations and update their callers to `code-review`.
+All bundled skills are served directly by `list_skills` and `get_skill`; no configuration copy is required. Explicit global, pool, or project overrides remain supported. Legacy `brain-review`, `code-review-organizer`, `review-items`, `commit-workflow`, and `release-package-check` copies are excluded from MCP discovery. Remove these copies from configurations. Route review callers to `code-review`, Git callers to `git-workflow`, and package checks to `package-integrity-check`.
 
 The review workflow uses ordinary GitHub Issues through GitHub tools or `gh`. Brain supplies project context; GitHub owns issue identity, metadata, discussion and history. Existing `review_*` tools remain a compatibility API for earlier installations, not a requirement of the bundled skill.
 

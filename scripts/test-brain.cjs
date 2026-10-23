@@ -597,15 +597,15 @@ test('namespaced project names survive registration and explicit profile selecti
 test('canonical Markdown skills support existing templates without recreating duplicate sources', (t) => {
 	const env = environment(t);
 	const project = env.project('markdown-skills');
-	const template = path.join(env.root, 'global/skills/commit-workflow/SKILL.md.njk');
+	const template = path.join(env.root, 'global/skills/github-release/SKILL.md.njk');
 	fs.renameSync(template, template.slice(0, -4));
 	require('@technomoron/agent-run/dist/config-tree').ensureDefaultGlobalTemplates(env.root);
 	assert.equal(fs.existsSync(template), false);
 	const rendered = renderProfile(project.cwd, project.directory, true, 'codex', undefined, { configRoot: env.root, profile: 'projects/markdown-skills' });
-	const native = rendered.context.skills.find((item) => item.name === 'commit-workflow');
+	const native = rendered.context.skills.find((item) => item.name === 'github-release');
 	assert.ok(path.basename(native.sourcePath) === 'SKILL.md');
 	assert.doesNotMatch(native.renderedContent, /\{%|\{\{/);
-	assert.doesNotMatch(getSkill(env.store(project.cwd), 'commit-workflow').content, /\{%|\{\{/);
+	assert.doesNotMatch(getSkill(env.store(project.cwd), 'github-release').content, /\{%|\{\{/);
 });
 
 test('manual goal-format metadata and legacy notes are searchable; deleting the index preserves knowledge', (t) => {
@@ -1355,7 +1355,7 @@ test('compression uses the built-in skill when no catalog copy exists', (t) => {
 test('bundled workflows need no configuration copies and preserve explicit overrides', (t) => {
 	const env = environment(t);
 	const store = env.store(env.cwd);
-	for (const name of ['brain-consolidate', 'brain-import', 'brain-memory', 'code-review', 'todo-manager']) {
+	for (const name of ['brain-consolidate', 'brain-import', 'brain-memory', 'code-review', 'todo-manager', 'git-workflow', 'package-integrity-check']) {
 		const skill = getSkill(store, name);
 		assert.equal(skill.scope, 'global');
 		assert.ok(skill.content.length > 0, name);
@@ -1365,7 +1365,7 @@ test('bundled workflows need no configuration copies and preserve explicit overr
 	const file = path.join(env.root, 'global', 'skills', 'code-review', 'SKILL.md');
 	assert.equal(fs.existsSync(file), false);
 	assert.equal(getSkill(store, 'code-review').source, 'builtin:code-review');
-	assert.ok(!listSkills(store).some((skill) => ['brain-review', 'code-review-organizer', 'review-items'].includes(skill.name)));
+	assert.ok(!listSkills(store).some((skill) => ['brain-review', 'code-review-organizer', 'review-items', 'commit-workflow', 'release-package-check'].includes(skill.name)));
 	fs.mkdirSync(path.dirname(file), { recursive: true });
 	fs.writeFileSync(file, '---\nname: code-review\ndescription: Local review policy\n---\nLocal review policy.\n');
 	initializeBrain(env.root, env.cwd);

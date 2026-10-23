@@ -1,5 +1,7 @@
 Unreleased (2026-10-23)
 -----------------------
+* Bundle package-integrity-check in place of release-package-check.
+* Bundle Git operations and commit policy in git-workflow.
 * Load all Brain workflows directly from the package instead of installing configuration copies.
 * Track reviews and tasks with GitHub issue types and structured severity.
 * Serve one bundled code-review workflow using ordinary GitHub issues, with optional local overrides.

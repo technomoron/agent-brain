@@ -34,7 +34,7 @@ export function getSkills(store: BrainStore): Skill[] {
 			const text = skillEnv.render(path.relative(store.configRoot, file), context);
 			const document = readMarkdown(text);
 			const parsed = metadata.parse(document.metadata);
-			if (['brain-review', 'code-review-organizer', 'review-items'].includes(parsed.name)) continue;
+			if (['brain-review', 'code-review-organizer', 'review-items', 'commit-workflow', 'release-package-check'].includes(parsed.name)) continue;
 			if (path.basename(path.dirname(file)) !== parsed.name) throw new Error(`Skill name must match directory: ${file}`);
 			let content = document.content;
 			if (parsed.extends) {
