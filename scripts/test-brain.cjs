@@ -1355,7 +1355,10 @@ test('compression uses the built-in skill when no catalog copy exists', (t) => {
 test('bundled workflows need no configuration copies and preserve explicit overrides', (t) => {
 	const env = environment(t);
 	const store = env.store(env.cwd);
-	for (const name of ['brain-consolidate', 'brain-import', 'brain-memory', 'code-review', 'todo-manager', 'git-workflow', 'package-integrity-check', 'node-cleanup']) {
+	const retired = path.join(env.root, 'global', 'skills', 'personal-memory', 'SKILL.md');
+	fs.mkdirSync(path.dirname(retired), { recursive: true });
+	fs.writeFileSync(retired, '---\nname: personal-memory\ndescription: Retired memory wrapper\n---\nUse brain-memory.\n');
+	for (const name of ['brain-consolidate', 'brain-import', 'brain-memory', 'code-review', 'todo-manager', 'git-workflow', 'package-integrity-check', 'node-cleanup', 'unslop']) {
 		const skill = getSkill(store, name);
 		assert.equal(skill.scope, 'global');
 		assert.ok(skill.content.length > 0, name);
@@ -1365,7 +1368,7 @@ test('bundled workflows need no configuration copies and preserve explicit overr
 	const file = path.join(env.root, 'global', 'skills', 'code-review', 'SKILL.md');
 	assert.equal(fs.existsSync(file), false);
 	assert.equal(getSkill(store, 'code-review').source, 'builtin:code-review');
-	assert.ok(!listSkills(store).some((skill) => ['brain-review', 'code-review-organizer', 'review-items', 'commit-workflow', 'release-package-check'].includes(skill.name)));
+	assert.ok(!listSkills(store).some((skill) => ['brain-review', 'code-review-organizer', 'review-items', 'commit-workflow', 'release-package-check', 'personal-memory'].includes(skill.name)));
 	fs.mkdirSync(path.dirname(file), { recursive: true });
 	fs.writeFileSync(file, '---\nname: code-review\ndescription: Local review policy\n---\nLocal review policy.\n');
 	initializeBrain(env.root, env.cwd);

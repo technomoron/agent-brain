@@ -32,6 +32,8 @@ const coreSkills = new Set([
 	'git-workflow',
 	'package-integrity-check',
 	'node-cleanup',
+	'unslop',
+	'personal-memory',
 	'npm-cleanup',
 	'release-package-check',
 	'commit-workflow',

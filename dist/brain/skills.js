@@ -34,7 +34,7 @@ function getSkills(store) {
             const text = skillEnv.render(path.relative(store.configRoot, file), context);
             const document = (0, store_1.readMarkdown)(text);
             const parsed = metadata.parse(document.metadata);
-            if (['brain-review', 'code-review-organizer', 'review-items', 'commit-workflow', 'release-package-check'].includes(parsed.name))
+            if (['brain-review', 'code-review-organizer', 'review-items', 'commit-workflow', 'release-package-check', 'personal-memory'].includes(parsed.name))
                 continue;
             if (path.basename(path.dirname(file)) !== parsed.name)
                 throw new Error(`Skill name must match directory: ${file}`);

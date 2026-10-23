@@ -1,5 +1,6 @@
 Unreleased (2026-10-23)
 -----------------------
+* Bundle unslop and merge personal-memory guidance into brain-memory.
 * Serve node-cleanup from the agent-brain bundle and remove the pnmp typo rule.
 * Bundle package-integrity-check in place of release-package-check.
 * Bundle Git operations and commit policy in git-workflow.

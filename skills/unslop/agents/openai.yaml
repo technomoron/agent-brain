@@ -1,0 +1,4 @@
+interface:
+  display_name: "Unslop"
+  short_description: "Clean up AI-generated code"
+  default_prompt: "Use $unslop to clean up AI-generated code while preserving behavior."
