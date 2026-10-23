@@ -14,7 +14,6 @@ const project_1 = require("@technomoron/agent-run/dist/project");
 const utils_1 = require("@technomoron/agent-run/dist/utils");
 const config_1 = require("./config");
 const store_1 = require("./store");
-const built_in_skills_1 = require("./built-in-skills");
 function initializeBrain(configRoot, cwd) {
     if ((0, utils_1.isSamePathOrDescendant)(path.resolve(configRoot), (0, project_1.findProjectRoot)(cwd)))
         throw new Error('Brain configuration must live outside the source repository.');
@@ -40,13 +39,6 @@ function initializeBrain(configRoot, cwd) {
             for (const directory of directories)
                 initializeScopeDirectories(store, directory);
         });
-        for (const [name, skill] of Object.entries((0, built_in_skills_1.readBuiltInSkills)())) {
-            if (name === 'code-review')
-                continue; // Served directly from the bundle; local files are explicit overrides.
-            const destination = store.safePath('global', 'skills', name, 'SKILL.md');
-            if (!fs.existsSync(destination))
-                store.atomicWrite(destination, `---\n${(0, yaml_1.stringify)({ name, description: skill.description })}---\n\n${skill.content}\n`);
-        }
     }
     finally {
         store.close();

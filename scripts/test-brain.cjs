@@ -562,9 +562,10 @@ test('initialization creates scope directories and preserves existing knowledge 
 	const store = env.store(project.cwd);
 	const item = store.remember({ scope: 'project', type: 'constraint', authority: 'user', title: 'Keep data', content: 'Preserve existing files.' });
 	const skill = path.join(env.root, 'global/skills/brain-memory/SKILL.md');
-	assert.match(fs.readFileSync(skill, 'utf8'), /For ordinary questions, explanations, and conversation, answer directly without brain lookups/);
-	assert.match(fs.readFileSync(path.join(env.root, 'global/skills/todo-manager/SKILL.md'), 'utf8'), /A request to do work does not by itself authorize creating a saved task/);
-	fs.appendFileSync(skill, '\nUser customization.\n');
+	assert.match(getSkill(store, 'brain-memory').content, /For ordinary questions, explanations, and conversation, answer directly without brain lookups/);
+	assert.match(getSkill(store, 'todo-manager').content, /A request to do work does not by itself authorize creating a saved task/);
+	fs.mkdirSync(path.dirname(skill), { recursive: true });
+	fs.writeFileSync(skill, '---\nname: brain-memory\ndescription: Custom memory\n---\nUser customization.\n');
 	const existingSkill = fs.readFileSync(skill, 'utf8');
 	initializeBrain(env.root, project.cwd);
 	for (const scope of ['global', 'default', 'projects/layout']) {
@@ -1254,11 +1255,13 @@ test('consolidation skill initialization preserves customization and matches its
 	const store = env.store(env.cwd);
 	const skill = getSkill(store, 'brain-consolidate');
 	const starter = path.join(__dirname, '../skills/brain-consolidate/SKILL.md');
-	assert.equal(fs.readFileSync(starter, 'utf8'), fs.readFileSync(path.join(env.root, skill.source), 'utf8'));
-	fs.appendFileSync(path.join(env.root, skill.source), '\nLocal customization.\n');
+	assert.equal(skill.source, 'builtin:brain-consolidate');
+	const override = path.join(env.root, 'global/skills/brain-consolidate/SKILL.md');
+	fs.mkdirSync(path.dirname(override), { recursive: true });
+	fs.writeFileSync(override, fs.readFileSync(starter, 'utf8') + '\nLocal customization.\n');
 	initializeBrain(env.root, env.cwd);
 	assert.match(getSkill(store, 'brain-consolidate').content, /Local customization/);
-	fs.unlinkSync(path.join(env.root, skill.source));
+	fs.unlinkSync(override);
 	initializeBrain(env.root, env.cwd);
 	assert.equal(getSkill(store, 'brain-consolidate').content, skill.content);
 });
@@ -1342,20 +1345,22 @@ test('brain preflight checks the configured MCP bridge, reports its cause and re
 
 test('compression uses the built-in skill when no catalog copy exists', (t) => {
 	const env = environment(t);
-	fs.rmSync(path.join(env.root, 'global', 'skills', 'brain-consolidate'), { recursive: true });
+	fs.rmSync(path.join(env.root, 'global', 'skills', 'brain-consolidate'), { recursive: true, force: true });
 	const result = spawnSync(process.execPath, [path.resolve(__dirname, '../dist/agent-brain.js'), 'consolidation-skill', '--configdir', env.root, '--cwd', env.cwd], { encoding: 'utf8' });
 	assert.equal(result.status, 0, result.stderr);
 	assert.equal(JSON.parse(result.stdout).content, require('../dist/brain/consolidation-skill').consolidationSkill.content);
 });
 
 
-test('initialization installs all MCP-owned workflows and preserves customizations', (t) => {
+test('bundled workflows need no configuration copies and preserve explicit overrides', (t) => {
 	const env = environment(t);
 	const store = env.store(env.cwd);
 	for (const name of ['brain-consolidate', 'brain-import', 'brain-memory', 'code-review', 'todo-manager']) {
 		const skill = getSkill(store, name);
 		assert.equal(skill.scope, 'global');
 		assert.ok(skill.content.length > 0, name);
+		assert.equal(skill.source, `builtin:${name}`);
+		assert.equal(fs.existsSync(path.join(env.root, 'global', 'skills', name, 'SKILL.md')), false);
 	}
 	const file = path.join(env.root, 'global', 'skills', 'code-review', 'SKILL.md');
 	assert.equal(fs.existsSync(file), false);
@@ -1374,7 +1379,7 @@ test('initialization installs all MCP-owned workflows and preserves customizatio
 	const extended = getSkill(env.store(project.cwd), 'code-review');
 	assert.match(extended.content, /GitHub Issues/);
 	assert.match(extended.content, /Project review policy/);
-	fs.unlinkSync(path.join(env.root, 'global', 'skills', 'brain-import', 'SKILL.md'));
+	assert.equal(getSkill(store, 'brain-import').source, 'builtin:brain-import');
 	initializeBrain(env.root, env.cwd);
 	assert.match(getSkill(store, 'brain-import').content, /provenance/);
 });

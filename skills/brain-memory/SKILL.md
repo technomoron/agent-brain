@@ -11,7 +11,7 @@ Before substantial work, call get_context with the task and affected paths. Foll
 
 Do not create, edit, rename, move, or delete files inside the agent-run configuration directory yourself whenever a brain tool can do it. The tools keep the metadata, ids, revisions, index, and write lock consistent; direct file writes bypass those checks and can leave individual records unreadable.
 
-Use remember to add knowledge, amend_knowledge to revise it, deprecate_knowledge to retire it, promote to copy it to another scope, resolve_review to close a review finding, and the todo tools for tasks. If you want a specific file name, pass filename to remember rather than writing or renaming the file afterwards; the id in the front matter is the identity, so the name is free to change but the tools should be the ones changing it.
+Use remember to add knowledge, amend_knowledge to revise it, deprecate_knowledge to retire it, promote to copy it to another scope, resolve_review to close a review finding, and the bundled todo-manager workflow for tasks. If you want a specific file name, pass filename to remember rather than writing or renaming the file afterwards; the id in the front matter is the identity, so the name is free to change but the tools should be the ones changing it.
 
 This covers generated runtime state as well: never hand-edit anything under a profile's live/ directory. Regenerate it with agent-run instead.
 
@@ -56,7 +56,7 @@ Choose the knowledge type by content: preferences for user choices, constraints 
 
 Use the bundled code-review skill for code reviews and saved findings. Track new findings in GitHub Issues; do not create duplicate brain knowledge records.
 
-Use todo tools for tasks and preserve their external identities. Reusable workflows belong in skills/<name>/SKILL.md; actual reusable templates belong in templates/. These are separate from knowledge items, and remember does not install skills or templates. Keep source references and distinguish current behavior from historical notes and planned features. Keep project-specific content in project scope; default is only for work outside configured projects.
+Use the bundled todo-manager skill for tasks and preserve their external identities. Reusable workflows belong in skills/<name>/SKILL.md; actual reusable templates belong in templates/. These are separate from knowledge items, and remember does not install skills or templates. Keep source references and distinguish current behavior from historical notes and planned features. Keep project-specific content in project scope; default is only for work outside configured projects.
 
 Pool scope: `global/` is server-wide, `pools/<name>/` is shared by the active pool, and `projects/<owner>/<repo>/` belongs to one repository. Use `scope: pool` only for deliberately shared pool knowledge. Keep review findings and tasks in their individual repository. Global intent must still be explicit.
 

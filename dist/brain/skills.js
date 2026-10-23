@@ -15,7 +15,7 @@ const metadata = zod_1.z.object({
     tags: zod_1.z.array(zod_1.z.string()).default([]),
     extends: zod_1.z.string().regex(/^(?:global|pool):[a-zA-Z0-9][a-zA-Z0-9._-]*$/).optional()
 });
-// Resolve bundled review instructions and scope-specific skill overrides.
+// Resolve bundled workflows and scope-specific skill overrides.
 function getSkills(store) {
     const profile = store.profile ?? 'default';
     const directory = store.scopeDirectory(store.profile ? 'project' : 'default');
@@ -24,10 +24,11 @@ function getSkills(store) {
     const skillEnv = (0, templates_1.createSkillNunjucksEnv)(store.configRoot, directory, undefined, store.pool);
     const skills = new Map();
     const parentSkills = new Map();
-    const bundledReview = { name: 'code-review', ...(0, built_in_skills_1.readBuiltInSkill)('code-review'),
-        tags: [], scope: 'global', source: 'builtin:code-review' };
-    skills.set(bundledReview.name, bundledReview);
-    parentSkills.set('global:code-review', bundledReview);
+    for (const [name, packaged] of Object.entries((0, built_in_skills_1.readBuiltInSkills)())) {
+        const skill = { name, ...packaged, tags: [], scope: 'global', source: `builtin:${name}` };
+        skills.set(name, skill);
+        parentSkills.set(`global:${name}`, skill);
+    }
     for (const { scope, directory } of store.scopes) {
         for (const file of store.files(path.join(directory, 'skills')).filter((file) => path.basename(file) === 'SKILL.md')) {
             const text = skillEnv.render(path.relative(store.configRoot, file), context);

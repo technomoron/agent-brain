@@ -51,11 +51,11 @@ Operational systemd and Windows installation scripts remain in agent-run, which 
 
 The server bundles `brain-consolidate`, `brain-import`, `brain-memory`, `code-review`, and `todo-manager` under `skills/`.
 
-`code-review` is served directly by `list_skills` and `get_skill`; no configuration copy is required. Explicit global, pool, or project overrides remain supported. Legacy `brain-review`, `code-review-organizer`, and `review-items` copies are excluded from MCP discovery. Remove these copies from configurations and update their callers to `code-review`.
+All bundled skills are served directly by `list_skills` and `get_skill`; no configuration copy is required. Explicit global, pool, or project overrides remain supported. Legacy `brain-review`, `code-review-organizer`, and `review-items` copies are excluded from MCP discovery. Remove these copies from configurations and update their callers to `code-review`.
 
 The review workflow uses ordinary GitHub Issues through GitHub tools or `gh`. Brain supplies project context; GitHub owns issue identity, metadata, discussion and history. Existing `review_*` tools remain a compatibility API for earlier installations, not a requirement of the bundled skill.
 
-Initialization installs missing copies of the other packaged workflows and preserves customizations. Consolidation's CLI fallback reads its packaged source.
+Initialization does not copy bundled skills into configuration directories. Remove old bundled-skill copies to use the package versions; intentional overrides remain supported. Consolidation's CLI fallback reads the same packaged source.
 
 ## Shared skill catalog
 

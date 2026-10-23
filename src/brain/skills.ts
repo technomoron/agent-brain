@@ -1,5 +1,5 @@
 import * as path from 'node:path';
-import { readBuiltInSkill } from './built-in-skills';
+import { readBuiltInSkills } from './built-in-skills';
 import { z } from 'zod';
 import { BrainStore, readMarkdown, type Scope } from './store';
 import { createNunjucksEnv, createSkillNunjucksEnv, buildRenderContext } from '@technomoron/agent-run/dist/templates';
@@ -14,7 +14,7 @@ const metadata = z.object({
 
 type Skill = z.infer<typeof metadata> & { scope: Scope; source: string; content: string };
 
-// Resolve bundled review instructions and scope-specific skill overrides.
+// Resolve bundled workflows and scope-specific skill overrides.
 export function getSkills(store: BrainStore): Skill[] {
 	const profile = store.profile ?? 'default';
 	const directory = store.scopeDirectory(store.profile ? 'project' : 'default');
@@ -24,10 +24,11 @@ export function getSkills(store: BrainStore): Skill[] {
 	const skillEnv = createSkillNunjucksEnv(store.configRoot, directory, undefined, store.pool);
 	const skills = new Map<string, Skill>();
 	const parentSkills = new Map<string, Skill>();
-	const bundledReview: Skill = { name: 'code-review', ...readBuiltInSkill('code-review'),
-		tags: [], scope: 'global', source: 'builtin:code-review' };
-	skills.set(bundledReview.name, bundledReview);
-	parentSkills.set('global:code-review', bundledReview);
+	for (const [name, packaged] of Object.entries(readBuiltInSkills())) {
+		const skill: Skill = { name, ...packaged, tags: [], scope: 'global', source: `builtin:${name}` };
+		skills.set(name, skill);
+		parentSkills.set(`global:${name}`, skill);
+	}
 	for (const { scope, directory } of store.scopes) {
 		for (const file of store.files(path.join(directory, 'skills')).filter((file) => path.basename(file) === 'SKILL.md')) {
 			const text = skillEnv.render(path.relative(store.configRoot, file), context);
