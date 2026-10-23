@@ -60,6 +60,7 @@ exports.knowledgeDirectories = {
     rule: 'rules', preference: 'preferences', convention: 'conventions', constraint: 'constraints',
     decision: 'decisions', spec: 'specs', review: 'reviews', memory: 'memory', observation: 'observations'
 };
+// Parse optional YAML front matter and normalize Markdown line endings.
 function readMarkdown(text) {
     const normalized = text.replace(/\r\n/g, '\n');
     const match = /^---\n([\s\S]*?)\n---(?:\n|$)/.exec(normalized);
@@ -68,25 +69,30 @@ function readMarkdown(text) {
     return match ? { metadata: (0, yaml_1.parse)(match[1], { maxAliasCount: 50 }), content: normalized.slice(match[0].length).trim() }
         : { metadata: null, content: normalized.trim() };
 }
+// Hash file text for stable revisions and legacy record IDs.
 function hash(text) { return (0, node_crypto_1.createHash)('sha256').update(text).digest('hex'); }
 class BrainStore {
+    // Describe an unreadable record without losing its source or known ID.
     brokenFile(file, error, id) {
         const message = error instanceof zod_1.z.ZodError
             ? error.issues.map((issue) => `${issue.path.join('.') || 'metadata'}: ${issue.message}`).join('; ')
             : error instanceof Error ? error.message.split('\n')[0] : String(error);
         return { source: path.relative(this.configRoot, file), status: 'broken', error: message, ...(id ? { id } : {}) };
     }
+    // Attach broken-file diagnostics to a tool result when needed.
     withDiagnostics(value) {
         const brokenFiles = [...this.knowledgeErrors, ...this.todoErrors];
         if (!brokenFiles.length)
             return value;
         return Array.isArray(value) ? { items: value, brokenFiles } : { ...value, brokenFiles };
     }
+    // Reject access to records with matching broken-file diagnostics.
     assertReadable(id, errors) {
         const matches = errors.filter((item) => item.id === id || item.source === id || path.basename(item.source, '.md') === id);
         if (matches.length)
             throw new Error(`Cannot read or update broken file: ${matches.map((item) => `${item.source}: ${item.error}`).join('; ')}. Correct the file on disk first.`);
     }
+    // Resolve active scopes and open the local knowledge search index.
     constructor(configRoot, cwd) {
         this.configRoot = configRoot;
         this.cwd = cwd;
@@ -107,7 +113,9 @@ class BrainStore {
         this.db = new node_sqlite_1.DatabaseSync(this.safePath('index', 'knowledge.sqlite'));
         this.db.exec('PRAGMA busy_timeout = 5000; PRAGMA journal_mode = WAL; CREATE VIRTUAL TABLE IF NOT EXISTS knowledge USING fts5(source UNINDEXED, environment UNINDEXED, title, content, tags);');
     }
+    // Close the knowledge search database.
     close() { this.db.close(); }
+    // Resolve a path inside Brain storage and reject symlink traversal.
     safePath(...parts) {
         const target = path.resolve(this.configRoot, ...parts);
         if (!(0, utils_1.isSamePathOrDescendant)(target, this.configRoot))
@@ -126,17 +134,20 @@ class BrainStore {
         }
         return target;
     }
+    // Create a private directory inside Brain storage.
     directory(...parts) {
         const directory = this.safePath(...parts);
         fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
         return directory;
     }
+    // Resolve an available scope to its storage directory.
     scopeDirectory(scope) {
         const directory = this.scopes.find((entry) => entry.scope === scope)?.directory;
         if (!directory)
             throw new Error(`Scope ${scope} is not available in this environment`);
         return this.safePath(directory);
     }
+    // List allowed files recursively and optionally collect unreadable paths.
     files(directory, options = {}) {
         const { onError } = options;
         try {
@@ -163,12 +174,14 @@ class BrainStore {
             return [];
         }
     }
+    // Read a storage file with a one-MiB limit.
     read(file) {
         const target = this.safePath(file);
         if (fs.statSync(target).size > 1024 * 1024)
             throw new Error(`Markdown file exceeds 1 MiB: ${file}`);
         return fs.readFileSync(target, 'utf8');
     }
+    // Replace a storage file atomically with private permissions.
     atomicWrite(file, text) {
         const target = this.safePath(file);
         this.directory(path.dirname(target));
@@ -181,6 +194,7 @@ class BrainStore {
             fs.rmSync(temporary, { force: true });
         }
     }
+    // Serialize storage writes and release the lock after completion.
     writeLocked(fn) {
         const file = this.safePath('runtime', 'brain-write.lock');
         let descriptor;
@@ -201,6 +215,7 @@ class BrainStore {
             fs.unlinkSync(file);
         }
     }
+    // Load scoped knowledge and report malformed or duplicate records.
     allKnowledge() {
         this.knowledgeErrors.length = 0;
         const result = [];
@@ -209,7 +224,10 @@ class BrainStore {
             if (scope === 'global')
                 directories.push(['memory', path.relative(directory, path.join(this.configRoot, 'notes', 'memory'))]);
             for (const [type, folder] of directories) {
-                for (const file of this.files(path.join(directory, folder), { onError: (file, error) => this.knowledgeErrors.push(this.brokenFile(file, error)) })) {
+                for (const file of this.files(path.join(directory, folder), {
+                    // Collect unreadable knowledge paths for the current scan.
+                    onError: (file, error) => this.knowledgeErrors.push(this.brokenFile(file, error))
+                })) {
                     let id;
                     try {
                         const text = this.read(file);
@@ -250,9 +268,11 @@ class BrainStore {
         }
         return result.filter((item) => counts.get(item.id) === 1);
     }
+    // Search current knowledge with scope, type and status filters.
     search(query, options = {}) {
         return this.searchItems(this.allKnowledge(), query, options);
     }
+    // Rank supplied knowledge through full-text search and apply result filters.
     searchItems(items, query, options = {}) {
         const environment = this.profile ?? 'default';
         this.refreshIndex(items, environment);
@@ -263,10 +283,12 @@ class BrainStore {
         return ranked.map((source) => bySource.get(source)).filter((item) => item !== undefined).filter((item) => (options.includeDeprecated || item.status === 'active') && (!options.scopes || options.scopes.includes(item.scope)) &&
             (!options.types || options.types.includes(item.type))).slice(0, options.limit ?? 50);
     }
+    // Update changed search rows transactionally while retaining unchanged rows.
     refreshIndex(items, environment) {
         const desired = new Map(items.map((item) => [item.source, {
                 source: item.source, title: item.title, content: item.content, tags: [...item.tags, item.finding ?? ''].join(' ').trim()
             }]));
+        // Compare current search rows with the desired knowledge snapshot.
         const changes = () => {
             const current = this.db.prepare('SELECT rowid, source, title, content, tags FROM knowledge WHERE environment = ?').all(environment);
             const unchanged = new Set();
@@ -300,6 +322,7 @@ class BrainStore {
             throw error;
         }
     }
+    // Select relevant and always-recalled knowledge within the context budget.
     context(task, files = [], symbols = []) {
         const scanned = this.allKnowledge();
         const all = scanned.filter((item) => item.status === 'active');
@@ -319,6 +342,7 @@ class BrainStore {
         });
         return { items, omitted: selected.length - items.length, profile: this.profile, scopes: this.scopes.map((scope) => scope.scope) };
     }
+    // Validate and save a new knowledge record in its authorized scope.
     remember(input) {
         const value = exports.knowledgeInput.parse(input);
         if (value.type === 'review' && (value.scope === 'pool' || (this.pool && value.scope !== 'project')))
@@ -383,6 +407,7 @@ class BrainStore {
     }
     /** Review findings in severity then sequence order. Open findings only unless states are given. */
     reviews(options = {}) {
+        // Read the numeric sequence from a numbered finding.
         const sequence = (item) => Number.parseInt(item.finding.slice(1), 10);
         return this.allKnowledge()
             .filter((item) => (!this.pool || item.scope === 'project') && item.type === 'review' && item.finding && item.severity)
@@ -390,10 +415,12 @@ class BrainStore {
             .filter((item) => (options.state ?? ['open']).includes(item.state ?? 'open'))
             .sort((left, right) => severityOrder[left.severity] - severityOrder[right.severity] || sequence(left) - sequence(right));
     }
+    // Read saved severity counters or initialize empty counters.
     reviewCounters(scope) {
         const file = this.safePath(this.scopeDirectory(scope), 'review-counters.json');
         return fs.existsSync(file) ? reviewCountersSchema.parse(JSON.parse(fs.readFileSync(file, 'utf8'))) : { C: 0, H: 0, M: 0, L: 0 };
     }
+    // Persist the highest used sequence for a severity.
     reserveFinding(scope, finding) {
         const counters = this.reviewCounters(scope);
         const prefix = finding[0];
@@ -403,6 +430,7 @@ class BrainStore {
         counters[prefix] = Math.max(counters[prefix], number);
         this.atomicWrite(path.join(this.scopeDirectory(scope), 'review-counters.json'), JSON.stringify(counters) + '\n');
     }
+    // Read and validate a scope’s archived review closures.
     closedReviews(scope) {
         const file = this.safePath(this.scopeDirectory(scope), 'review-history.jsonl');
         if (!fs.existsSync(file))
@@ -414,6 +442,7 @@ class BrainStore {
             return record;
         });
     }
+    // Search archived review closures with filters and pagination.
     reviewHistory(options = {}) {
         const query = options.query?.toLowerCase();
         const items = this.scopes.filter((entry) => (!this.pool || entry.scope === 'project') && (!options.scope || entry.scope === options.scope))
@@ -423,6 +452,7 @@ class BrainStore {
         const offset = options.offset ?? 0;
         return { items: items.slice(offset, offset + (options.limit ?? 100)), total: items.length };
     }
+    // Preserve a finding number and closure before deleting the full record.
     archiveReview(item, state, reason, closed) {
         if (!item.finding || !item.severity)
             throw new Error('Only numbered review findings can be archived.');
@@ -438,6 +468,7 @@ class BrainStore {
         fs.unlinkSync(this.safePath(item.source));
         return record;
     }
+    // Archive resolved findings and finish interrupted archive deletions.
     archiveReviews(scope) {
         return this.writeLocked(() => {
             const history = this.closedReviews(scope);
@@ -449,6 +480,7 @@ class BrainStore {
             });
         });
     }
+    // Close a current review finding and archive its resolution.
     resolveReview(id, revision, state, reason) {
         return this.writeLocked(() => {
             const item = this.get(id);
@@ -459,6 +491,7 @@ class BrainStore {
             return this.archiveReview(item, state, reason ?? '', new Date().toISOString());
         });
     }
+    // Mark a current knowledge record deprecated without deleting it.
     deprecate(id, revision, reason) {
         return this.writeLocked(() => {
             const item = this.get(id);
@@ -469,6 +502,7 @@ class BrainStore {
             return this.get(id);
         });
     }
+    // Copy current knowledge into another scope with provenance and a new ID.
     promote(id, scope, revision) {
         if (this.get(id).type === 'review' && (scope === 'pool' || (this.pool && scope !== 'project')))
             throw new Error('Review findings must belong to an individual repository');
@@ -488,6 +522,7 @@ class BrainStore {
             return this.get(promoted.id);
         });
     }
+    // Read one record from active scopes and reject broken or missing records.
     get(id) {
         const item = this.allKnowledge().find((entry) => entry.id === id);
         this.assertReadable(id, this.knowledgeErrors);

@@ -19,6 +19,7 @@ const { serveApiCore, defaultSocketPath } = require('../dist/brain/server');
 const { Client } = require('@modelcontextprotocol/sdk/client/index.js');
 const { StdioClientTransport } = require('@modelcontextprotocol/sdk/client/stdio.js');
 
+// Create isolated configuration and source directories for a test.
 function environment(t) {
 	const directory = fs.mkdtempSync(path.join(os.tmpdir(), 'brain-'));
 	fs.writeFileSync(path.join(directory, '.agent-run-test-repo'), '');
@@ -28,6 +29,7 @@ function environment(t) {
 	const cwd = path.join(directory, 'source');
 	fs.mkdirSync(cwd);
 	initializeBrain(root, cwd);
+	// Register a test project under the temporary configuration root.
 	function project(name) {
 		const source = path.join(directory, name);
 		fs.mkdirSync(source);
@@ -38,10 +40,14 @@ function environment(t) {
 		fs.writeFileSync(path.join(profile, 'agent-run.jsonc'), '{}\n');
 		return { cwd: source, directory: profile };
 	}
+	// Open a Brain store for the test source directory.
 	function store(cwd) { const value = new BrainStore(root, cwd); cleanups.push(() => value.close()); return value; }
-	return { directory, root, cwd, project, store, cleanup: (fn) => cleanups.push(fn) };
+	return { directory, root, cwd, project, store,
+	// Close test stores and remove temporary files.
+	cleanup: (fn) => cleanups.push(fn) };
 }
 
+// Connect test configuration to a temporary bare Git remote.
 function connectRemote(env) {
 	const remote = path.join(env.directory, 'remote.git');
 	for (const args of [
@@ -97,6 +103,7 @@ test('unchanged searches do not write or wait for a writer, and file changes ref
 	store.search('firstword');
 	const observer = new DatabaseSync(path.join(env.root, 'index', 'knowledge.sqlite'));
 	env.cleanup(() => observer.close());
+	// Read the SQLite data version to detect writes from other connections.
 	const version = () => observer.prepare('PRAGMA data_version').get().data_version;
 	const before = version();
 	const another = env.store(env.cwd);
@@ -156,6 +163,7 @@ test('skills inherit global and allow project overrides and explicit extension',
 	const env = environment(t);
 	const project = env.project('skills');
 	const store = env.store(project.cwd);
+	// Write test content after creating its parent directories.
 	const write = (directory, name, description, content, parent) => {
 		const target = path.join(directory, 'skills', name);
 		fs.mkdirSync(target, { recursive: true });
@@ -182,10 +190,12 @@ test('skill includes stay inside active skill directories in brain and native re
 	fs.mkdirSync(globalDir, { recursive: true });
 	fs.mkdirSync(localDir, { recursive: true });
 	const skill = path.join(globalDir, 'SKILL.md');
+	// Write a test skill with its metadata and content.
 	const writeSkill = (body) => fs.writeFileSync(skill, `---\nname: included\ndescription: Include checks\n---\n${body}\n`);
 	fs.writeFileSync(path.join(globalDir, 'part.txt'), 'Global {{ projectRoot }}');
 	fs.writeFileSync(path.join(localDir, 'part.txt'), 'Local');
 	fs.writeFileSync(path.join(project.directory, 'agent-run.jsonc'), JSON.stringify({ skills: { install: ['included'] } }));
+	// Render the selected test skill in its project context.
 	const render = () => renderProfile(project.cwd, project.directory, true, 'codex', undefined, { configRoot: env.root, profile: 'projects/includes' }).skills.find((item) => item.name === 'included').renderedContent;
 	writeSkill('{% include "./part.txt" %} {% include "projects/includes/skills/shared/part.txt" %}');
 	assert.ok(getSkill(store, 'included').content.includes(`Global ${project.cwd} Local`));
@@ -427,6 +437,7 @@ test('generated MCP files stay identical across install locations and runtime en
 	}
 });
 
+// Create a test MCP client connection.
 async function client(t, env, extra = []) {
 	const transport = new StdioClientTransport({ command: process.execPath, args: [require.resolve('@technomoron/agent-run/dist/agent-run.js'), 'mcp', '--configdir', env.root, '--cwd', env.cwd, ...extra],
 		env: process.env, stderr: 'pipe' });
@@ -447,6 +458,7 @@ test('MCP and CLI report broken files alongside valid results and recover after 
 	const service = await serveApiCore(env.root, defaultSocketPath(env.root));
 	env.cleanup(() => service.close());
 	const connection = await client(t, env);
+	// Send a test MCP tool request.
 	const call = (name, args) => connection.callTool({ name, arguments: args });
 	for (const [name, args] of [['search_knowledge', { query: 'survivingword' }], ['get_context', { task: 'survivingword' }], ['review_list', {}]]) {
 		const response = await call(name, args);
@@ -855,6 +867,7 @@ test('Git saves and pushes only eligible files, and refuses an unrelated staged 
 	assert.ok(!store.allKnowledge().some((item) => item.source.includes('templates')));
 	const item = store.remember({ scope: 'default', type: 'memory', title: 'Portable', content: 'Portableword knowledge.' });
 	store.atomicWrite('secrets/token.md', 'Never include this');
+	// Run a Git command and require it to succeed.
 	const git = (cwd, args) => {
 		const result = spawnSync('git', ['-C', cwd, ...args], { encoding: 'utf8', shell: false });
 		assert.equal(result.status, 0, result.stderr);
@@ -893,6 +906,7 @@ test('Git saves and pushes only eligible files, and refuses an unrelated staged 
 test('sync combines changes and stops before pushing on conflict or remote failure', (t) => {
 	const env = environment(t);
 	const store = env.store(env.cwd);
+	// Run a Git command and require it to succeed.
 	const git = (cwd, args) => {
 		const result = spawnSync('git', ['-C', cwd, ...args], { encoding: 'utf8' });
 		assert.equal(result.status, 0, result.stderr);
@@ -1027,6 +1041,7 @@ test('startup pull fast-forwards clean knowledge and preserves dirty or divergen
 	const env = environment(t);
 	const store = env.store(env.cwd);
 	const { pullOnStart } = require('../dist/brain/git');
+	// Run a Git command and require it to succeed.
 	const git = (cwd, args) => {
 		const result = spawnSync('git', ['-C', cwd, ...args], { encoding: 'utf8' });
 		assert.equal(result.status, 0, result.stderr);
@@ -1082,6 +1097,7 @@ test('service helper manages only the named normal account', { skip: process.pla
 		runuser: 'printf "runuser %s\\n" "$*" >> "$TEST_LOG"'
 	};
 	for (const [name, body] of Object.entries(programs)) fs.writeFileSync(path.join(bin, name), '#!/bin/sh\n' + body + '\n', { mode: 0o755 });
+	// Run the service installer with the test users and command stubs.
 	const run = (...users) => spawnSync('bash', [require.resolve('@technomoron/agent-run/scripts/ensure-agent-brain.sh'), ...users], { encoding: 'utf8', env: { ...process.env, PATH: bin + path.delimiter + process.env.PATH, TEST_LOG: log } });
 	assert.equal(run().status, 0);
 	assert.equal(fs.existsSync(log), false);
@@ -1138,6 +1154,7 @@ test('MCP recalls paginated closure history while normal retrieval stays clear',
 	const service = await serveApiCore(env.root, defaultSocketPath(env.root));
 	env.cleanup(() => service.close());
 	const mcp = await client(t, env);
+	// Send a test MCP tool request.
 	const call = async (name, args) => { const result = await mcp.callTool({ name, arguments: args }); assert.ok(!result.isError, result.content[0].text); return JSON.parse(result.content[0].text); };
 	for (const state of ['fixed', 'wontfix']) {
 		const finding = await call('remember', { scope: 'default', type: 'review', severity: 'high', title: `Closed ${state}`, content: 'Archiveduniqueword' });
@@ -1161,11 +1178,13 @@ test('consolidation inventories all records and archives exact originals with du
 	const env = environment(t);
 	const project = env.project('consolidation');
 	const store = env.store(project.cwd);
+	// Save test knowledge with the requested metadata.
 	const write = (title) => store.remember({ scope: 'project', type: 'constraint', authority: 'user', title, content: `Requirement ${title}`, recall: 'always', applies_to: ['src/**'] });
 	const first = write('First');
 	const second = write('Second');
 	const destination = write('Combined');
 	const original = fs.readFileSync(path.join(env.root, first.source), 'utf8');
+	// Select a record’s ID and revision for an archive request.
 	const ref = ({ id, revision }) => ({ id, revision });
 	const request = { sources: [first, second].map((item) => ({ ...ref(item), replacements: [ref(destination)] })), reason: 'Verified both requirements in the combined record' };
 	assert.equal(listKnowledge(store, { scope: 'project', limit: 1 }).total, 3);
@@ -1196,10 +1215,13 @@ test('consolidation refuses stale, incompatible and broken records before deleti
 	const { archiveKnowledge } = require('../dist/brain/consolidation');
 	const env = environment(t);
 	const store = env.store(env.cwd);
+	// Save test knowledge with the requested metadata.
 	const write = (extra = {}) => store.remember({ scope: 'default', type: 'memory', authority: 'user', title: 'Original', content: 'Keep this.', ...extra });
 	const source = write({ recall: 'always', applies_to: ['src/**'] });
 	let target = write();
+	// Select a record’s ID and revision for an archive request.
 	const ref = ({ id, revision }) => ({ id, revision });
+	// Build an archive request linking a source to its replacement.
 	const request = (src = source, dest = target) => ({ sources: [{ ...ref(src), replacements: [ref(dest)] }], reason: 'Consolidation' });
 	assert.throws(() => archiveKnowledge(store, request()), /always recall/);
 	target = store.amend(target.id, target.revision, { recall: 'always' });
@@ -1228,9 +1250,11 @@ test('consolidation preserves originals on archive failure and retries interrupt
 	const { archiveKnowledge, knowledgeHistory } = require('../dist/brain/consolidation');
 	const env = environment(t);
 	const store = env.store(env.cwd);
+	// Save test knowledge with the requested metadata.
 	const write = (title) => store.remember({ scope: 'default', type: 'memory', title, content: title });
 	const sources = [write('First'), write('Second')];
 	const target = write('Combined');
+	// Select a record’s ID and revision for an archive request.
 	const ref = ({ id, revision }) => ({ id, revision });
 	const request = { sources: sources.map((item) => ({ ...ref(item), replacements: [ref(target)] })), reason: 'Combined' };
 	const atomicWrite = store.atomicWrite;
@@ -1271,6 +1295,7 @@ test('MCP and CLI expose inventory, archival and original knowledge lookup', { s
 	const service = await serveApiCore(env.root, defaultSocketPath(env.root));
 	env.cleanup(() => service.close());
 	const mcp = await client(t, env);
+	// Send a test MCP tool request.
 	const call = async (name, args) => { const result = await mcp.callTool({ name, arguments: args }); assert.ok(!result.isError, result.content[0].text); return JSON.parse(result.content[0].text); };
 	const old = await call('remember', { scope: 'default', type: 'memory', title: 'Old', content: 'Old content' });
 	const replacement = await call('remember', { scope: 'default', type: 'observation', title: 'Extracted', content: 'Extracted facts' });
@@ -1307,6 +1332,7 @@ test('consolidation extracts user memory into typed destinations and rejects sym
 	const { archiveKnowledge, knowledgeHistory } = require('../dist/brain/consolidation');
 	const env = environment(t);
 	const store = env.store(env.cwd);
+	// Save test knowledge with the requested metadata.
 	const write = (type, content) => store.remember({ scope: 'default', type, authority: 'user', title: type, content });
 	const source = write('memory', 'Confirmed requirement: preserve data. Historical reason: a prior migration lost data.');
 	const targets = [write('constraint', 'Preserve data.'), write('memory', 'A prior migration lost data.')];
@@ -1413,6 +1439,7 @@ test('global, pool and repository scopes share knowledge and override skills wit
 test('local Git saves skill support files and skill/task deletions', (t) => {
  const env=environment(t), store=env.store(env.cwd);
  syncGit(store,'init');connectRemote(env);
+ // Run a Git command and require it to succeed.
  const git=(args)=>{const r=spawnSync('git',['-C',env.root,...args],{encoding:'utf8'});assert.equal(r.status,0,r.stderr);return r.stdout;};
  git(['config','user.name','Test']);git(['config','user.email','test@example.invalid']);
  const skill='global/skills/example/SKILL.md', script='global/skills/example/helper.py';

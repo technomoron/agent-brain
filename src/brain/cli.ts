@@ -14,6 +14,7 @@ import { syncConnector } from './connectors';
 import { gitPreview, pullOnStart, syncGit, SyncAction } from './git';
 import { githubReviews, reviewInput } from './github-reviews';
 
+// Parse CLI arguments and run the requested Brain command.
 export async function brainMain(argv: string[], wrapperCommand?: 'mcp' | 'create' | 'project'): Promise<void> {
 	const { values, positionals } = parseArgs({ args: argv, allowPositionals: true, strict: true, options: {
 		configdir: { type: 'string' }, cwd: { type: 'string' }, socket: { type: 'string' },
@@ -36,6 +37,7 @@ export async function brainMain(argv: string[], wrapperCommand?: 'mcp' | 'create
 		return;
 	}
 	if (values.pull && command !== 'serve') throw new Error('--pull is only supported by serve');
+	// Print a JSON result to standard output.
 	const print = (value: unknown): void => { process.stdout.write(`${JSON.stringify(value, null, 2)}\n`); };
 	if (values.help || command === 'help') {
 		process.stdout.write([
@@ -85,6 +87,7 @@ export async function brainMain(argv: string[], wrapperCommand?: 'mcp' | 'create
 			const service = await serveApiCore(root, socket);
 			process.stderr.write(`agent-brain listening on ${socket}\n`);
 			let closing = false;
+			// Close the local service once and report shutdown failures.
 			const close = (): void => { if (!closing) { closing = true; void service.close().catch((error: unknown) => { process.stderr.write(`${String(error)}\n`); process.exitCode = 1; }); } };
 			process.once('SIGTERM', close);
 			process.once('SIGINT', close);
@@ -94,9 +97,13 @@ export async function brainMain(argv: string[], wrapperCommand?: 'mcp' | 'create
 		return;
 	}
 	const store = new BrainStore(root, cwd);
+	// Require an item ID at the requested argument position.
 	const requireId = (index = 0): string => { const id = positionals[index]; if (!id) throw new Error('An item id is required'); return id; };
+	// Require the revision supplied for an update.
 	const requireRevision = (): string => { if (!values.revision) throw new Error('--revision is required; read the item first'); return values.revision; };
+	// Parse the required JSON command argument.
 	const json = (): unknown => { if (!values.json) throw new Error('--json is required'); return JSON.parse(values.json); };
+	// Print a result with any broken-file diagnostics.
 	const report = (value: unknown): void => print(store.withDiagnostics(value));
 	try {
 		switch (command) {
@@ -180,6 +187,7 @@ export async function brainMain(argv: string[], wrapperCommand?: 'mcp' | 'create
 	} finally { store.close(); }
 }
 
+// Print a command failure and set the process exit status.
 export function reportBrainError(error: unknown): void {
 	process.stderr.write(`agent-brain: ${error instanceof Error ? error.message : String(error)}\n`);
 	process.exitCode = 1;

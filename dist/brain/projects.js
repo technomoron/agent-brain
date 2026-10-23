@@ -14,6 +14,7 @@ const project_1 = require("@technomoron/agent-run/dist/project");
 const utils_1 = require("@technomoron/agent-run/dist/utils");
 const config_1 = require("./config");
 const store_1 = require("./store");
+// Initialize external Brain storage, templates and profile directories.
 function initializeBrain(configRoot, cwd) {
     if ((0, utils_1.isSamePathOrDescendant)(path.resolve(configRoot), (0, project_1.findProjectRoot)(cwd)))
         throw new Error('Brain configuration must live outside the source repository.');
@@ -44,11 +45,13 @@ function initializeBrain(configRoot, cwd) {
         store.close();
     }
 }
+// Create the knowledge, skill, task and template directories for a scope.
 function initializeScopeDirectories(store, directory) {
     for (const folder of [...Object.values(store_1.knowledgeDirectories), 'skills', 'todo', 'templates']) {
         store.directory(directory, folder);
     }
 }
+// Detect source languages, package scripts and the Git origin.
 function inspectProject(cwd) {
     const root = (0, project_1.findProjectRoot)(cwd);
     const git = (0, node_child_process_1.spawnSync)('git', ['-C', root, 'config', '--get', 'remote.origin.url'], { encoding: 'utf8', shell: false });
@@ -62,6 +65,7 @@ function inspectProject(cwd) {
         packageManager: fs.existsSync(path.join(root, 'pnpm-lock.yaml')) ? 'pnpm' : fs.existsSync(pkg) ? 'npm' : undefined,
         documents: ['README.md', 'AGENTS.md', 'CLAUDE.md'].filter((file) => fs.existsSync(path.join(root, file))), scripts };
 }
+// Register a source project using detected or interactively supplied settings.
 async function createBrainProject(configRoot, cwd, name, mode) {
     config_1.projectConfigSchema.shape.name.parse(name);
     const detected = inspectProject(cwd);

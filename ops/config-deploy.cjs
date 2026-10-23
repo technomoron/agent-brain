@@ -15,6 +15,7 @@ const data = config.dataRoot,
 	state = '/var/lib/agent-mcp/config-deploy',
 	catalog = '/var/lib/agent-mcp/catalogs/agent-brain-config';
 fs.mkdirSync(state, { recursive: true, mode: 0o700 });
+// Run a Git command against the private configuration catalog.
 function git(args) {
 	return execFileSync('git', ['-C', catalog, ...args], {
 		encoding: 'utf8',
@@ -22,8 +23,10 @@ function git(args) {
 		timeout: 60000
 	});
 }
+// Hash canonical live files to detect changes during deployment.
 function digest(root) {
 	const hash = crypto.createHash('sha256');
+	// Add canonical file paths and bytes to the deployment digest.
 	function scan(directory) {
 		for (const entry of fs
 			.readdirSync(directory, { withFileTypes: true })
@@ -40,6 +43,7 @@ function digest(root) {
 	scan(root);
 	return hash.digest('hex');
 }
+// Extract a catalog revision into a private staging directory.
 function extract(revision, directory) {
 	fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
 	const archive = execFileSync('git', ['-C', catalog, 'archive', revision], {
@@ -48,15 +52,15 @@ function extract(revision, directory) {
 	});
 	execFileSync('tar', ['-xf', '-', '--no-same-owner', '-C', directory], { input: archive, timeout: 60000 });
 }
-function snapshotLive(selection) {
-	return readSnapshot(data, selection, { required: false });
-}
+// Copy live canonical data while excluding runtime, index and Git state.
 function copyData(destination) {
 	fs.cpSync(data, destination, {
 		recursive: true,
+		// Exclude runtime, index and Git state from the candidate copy.
 		filter: (file) => !['index', 'runtime', '.git'].includes(path.relative(data, file).split(path.sep)[0])
 	});
 }
+// Check staged knowledge, skills, tasks and per-repository registrations.
 function validate(candidate, selection) {
 	for (const repo of selection.repositories) {
 		const cwd = path.join('/var/lib/agent-mcp/checkouts', ...repo.id.split('/'));
@@ -80,6 +84,7 @@ function validate(candidate, selection) {
 		}
 	}
 }
+// Reconcile Git and live data into a validated deployment candidate.
 function prepare(source, label) {
 	const selection = manifest(JSON.parse(fs.readFileSync(path.join(source, '.brain-deploy.json'), 'utf8')));
 	const incoming = readSnapshot(source, selection);
@@ -92,7 +97,7 @@ function prepare(source, label) {
 		if (!fs.existsSync(old)) extract(git(['rev-parse', 'HEAD']).trim(), old);
 		baseline = readSnapshot(old, selection, { required: false });
 	}
-	const live = snapshotLive(selection),
+	const live = readSnapshot(data, selection, { required: false }),
 		plan = mergeSnapshots(baseline, live, incoming);
 	if (plan.conflicts.length)
 		throw Error(
@@ -115,6 +120,7 @@ function prepare(source, label) {
 	fs.writeFileSync(path.join(state, 'prepared.json'), JSON.stringify(prepared), { mode: 0o600 });
 	console.log(JSON.stringify({ selection, changes: prepared.changes.length }));
 }
+// Activate staged data and its baseline while retaining rollback state.
 function activate() {
 	const prepared = JSON.parse(fs.readFileSync(path.join(state, 'prepared.json'), 'utf8'));
 	if (digest(data) !== prepared.before) throw Error('Live Brain changed after validation; retry deployment');
@@ -145,6 +151,7 @@ function activate() {
 	}
 	console.log('Configuration activated; rollback retained');
 }
+// Restore the previous data directory and deployment baseline.
 function rollback() {
 	const record = JSON.parse(fs.readFileSync(path.join(state, 'rollback.json'), 'utf8'));
 	if (!fs.existsSync(path.join(record.backup, 'data'))) throw Error('No rollback data');

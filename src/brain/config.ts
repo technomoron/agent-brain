@@ -7,6 +7,7 @@ import { parse as parseYaml } from 'yaml';
 import { z } from 'zod';
 import { isSamePathOrDescendant } from '@technomoron/agent-run/dist/utils';
 
+// Choose a local socket or user-specific Windows pipe for this configuration.
 export function defaultSocketPath(configRoot: string): string {
 	if (process.platform === 'win32') {
 		const identity = `${os.homedir().toLowerCase()}\0${path.resolve(configRoot).toLowerCase()}`;
@@ -30,6 +31,7 @@ export const brainConfigSchema = z.object({
 	])).default({})
 }).strict();
 
+// Read and validate optional Brain JSONC configuration.
 export function readBrainConfig(root: string): z.infer<typeof brainConfigSchema> | null {
 	const file = path.join(root, 'brain.jsonc');
 	if (!fs.existsSync(file)) return null;
@@ -51,31 +53,36 @@ export const projectConfigSchema = z.object({
 
 export type BrainProject = z.infer<typeof projectConfigSchema> & { profile: string };
 
+// Read registered projects from the configuration tree.
 export function listBrainProjects(configRoot: string): BrainProject[] {
 	const directory = path.join(configRoot, 'projects');
 	if (!fs.existsSync(directory)) return [];
+	// Find project configurations beneath this directory.
 	function scan(parent: string): BrainProject[] {
 		return fs.readdirSync(parent, { withFileTypes: true }).filter((entry) => entry.isDirectory()).sort((a, b) => a.name.localeCompare(b.name)).flatMap((entry) => {
-		const child = path.join(parent, entry.name);
-		const file = path.join(child, 'config.yaml');
-		if (!fs.existsSync(file)) return scan(child);
-		if (fs.lstatSync(file).isSymbolicLink()) throw new Error(`Project configuration must not be a symlink: ${file}`);
-		const config = projectConfigSchema.parse(parseYaml(fs.readFileSync(file, 'utf8')));
-		if (config.name !== path.relative(directory, child).split(path.sep).join('/')) throw new Error(`Project name must match directory: ${file}`);
-		return [{ ...config, profile: `projects/${config.name}` }];
+			const child = path.join(parent, entry.name);
+			const file = path.join(child, 'config.yaml');
+			if (!fs.existsSync(file)) return scan(child);
+			if (fs.lstatSync(file).isSymbolicLink()) throw new Error(`Project configuration must not be a symlink: ${file}`);
+			const config = projectConfigSchema.parse(parseYaml(fs.readFileSync(file, 'utf8')));
+			if (config.name !== path.relative(directory, child).split(path.sep).join('/')) throw new Error(`Project name must match directory: ${file}`);
+			return [{ ...config, profile: `projects/${config.name}` }];
 		});
 	}
 	return scan(directory);
 }
 
+// Find the profile registered under a project name.
 export function namedBrainProfile(configRoot: string, name: string): string | null {
 	return listBrainProjects(configRoot).find((project) => project.name === name || project.profile === name)?.profile ?? null;
 }
 
+// Find the profile containing the current source directory.
 export function registeredBrainProfile(configRoot: string, cwd: string): string | null {
 	return registeredBrainProject(configRoot, cwd)?.profile ?? null;
 }
 
+// Select the most specific registered source root and reject ties.
 export function registeredBrainProject(configRoot: string, cwd: string): { profile: string; root: string; pool?: string } | null {
 	const matches = listBrainProjects(configRoot).flatMap((project) => project.roots
 		.filter((root) => isSamePathOrDescendant(path.resolve(cwd), path.resolve(root)))

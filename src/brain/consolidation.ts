@@ -20,6 +20,7 @@ export const inventoryOptions = z.object({
 	offset: z.number().int().min(0).default(0), limit: z.number().int().min(1).max(100).default(50)
 }).strict();
 
+// List filtered knowledge metadata with pagination and the context budget.
 export function listKnowledge(store: BrainStore, input: z.input<typeof inventoryOptions> = {}) {
 	const options = inventoryOptions.parse(input);
 	if (options.scope) store.scopeDirectory(options.scope);
@@ -29,10 +30,12 @@ export function listKnowledge(store: BrainStore, input: z.input<typeof inventory
 	return { total: items.length, contextBudget: store.budget, items: items.slice(options.offset, options.offset + options.limit).map(({ content, ...item }) => ({ ...item, characters: content.length })) };
 }
 
+// Locate the archive history for an available scope.
 function historyFile(store: BrainStore, scope: z.infer<typeof scopeSchema>): string {
 	return store.safePath(store.scopeDirectory(scope), 'knowledge-history.jsonl');
 }
 
+// Read archive records and verify their scope, IDs and content hashes.
 function readHistory(store: BrainStore, scope: z.infer<typeof scopeSchema>): ArchivedRecord[] {
 	const file = historyFile(store, scope);
 	if (!fs.existsSync(file)) return [];
@@ -52,6 +55,7 @@ export const historyOptions = z.object({
 	offset: z.number().int().min(0).default(0), limit: z.number().int().min(1).max(100).default(50)
 }).strict();
 
+// Search archived records and include original text when an ID is requested.
 export function knowledgeHistory(store: BrainStore, input: z.input<typeof historyOptions> = {}) {
 	const options = historyOptions.parse(input);
 	if (options.scope) store.scopeDirectory(options.scope);

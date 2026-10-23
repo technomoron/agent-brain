@@ -7,7 +7,7 @@
   "license": "MIT",
   "copyright": "Copyright (c) 2026 Bj\u00f8rn Erik Jacobsen / Technomoron.com",
   "name": "@technomoron/agent-brain",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Project knowledge and skills MCP server extracted from agent-run",
   "bin": {
     "agent-brain": "dist/agent-brain.js",

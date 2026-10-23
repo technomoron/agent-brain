@@ -4,6 +4,7 @@ import { spawnSync } from 'node:child_process';
 import { BrainStore, knowledgeDirectories } from './store';
 import { listBrainProjects } from './config';
 
+// Run noninteractive Git commands and report failures.
 function git(root: string, args: string[]): string {
 	const result = spawnSync('git', ['-C', root, ...args], { encoding: 'utf8', shell: false, timeout: 60000,
 		env: { ...process.env, PATH: process.env.AGENT_RUN_REAL_PATH ?? process.env.PATH, GIT_TERMINAL_PROMPT: '0' }, maxBuffer: 16 * 1024 * 1024 });
@@ -11,12 +12,14 @@ function git(root: string, args: string[]): string {
 	return result.stdout.trimEnd();
 }
 
+// Require the configuration directory to be the Git repository root.
 function requireRepository(store: BrainStore): void {
 	if (fs.realpathSync(git(store.configRoot, ['rev-parse', '--show-toplevel'])) !== fs.realpathSync(store.configRoot)) {
 		throw new Error('Git sync requires the configuration directory itself to be the repository root.');
 	}
 }
 
+// Report configuration Git state, conflicts and branch.
 export function gitStatus(store: BrainStore): { state: string; files: string[]; conflicts: string[]; branch: string } {
 	if (!fs.existsSync(path.join(store.configRoot, '.git'))) return { state: 'uninitialized', files: [], conflicts: [], branch: '' };
 	requireRepository(store);
@@ -53,6 +56,7 @@ function syncableFiles(store: BrainStore): string[] {
 
 export type SyncAction = 'init' | 'save' | 'pull' | 'push' | 'sync';
 
+// Save, pull or push canonical configuration under the Brain write lock.
 export function syncGit(store: BrainStore, action: SyncAction, message?: string): ReturnType<typeof gitStatus> & { steps: string[] } {
 	return store.writeLocked(() => {
 		const steps: string[] = [];
@@ -97,10 +101,12 @@ export function syncGit(store: BrainStore, action: SyncAction, message?: string)
 	});
 }
 
+// Show Git state and canonical files eligible for synchronization.
 export function gitPreview(store: BrainStore): { status: ReturnType<typeof gitStatus>; files: string[] } {
 	return { status: gitStatus(store), files: syncableFiles(store) };
 }
 
+// Fast-forward clean configuration at startup without blocking service availability.
 export function pullOnStart(store: BrainStore): string {
 	try {
 		return store.writeLocked(() => {

@@ -22,6 +22,7 @@ exports.inventoryOptions = zod_1.z.object({
     scope: store_1.scopeSchema.optional(), types: zod_1.z.array(store_1.typeSchema).optional(), includeDeprecated: zod_1.z.boolean().optional(),
     offset: zod_1.z.number().int().min(0).default(0), limit: zod_1.z.number().int().min(1).max(100).default(50)
 }).strict();
+// List filtered knowledge metadata with pagination and the context budget.
 function listKnowledge(store, input = {}) {
     const options = exports.inventoryOptions.parse(input);
     if (options.scope)
@@ -31,9 +32,11 @@ function listKnowledge(store, input = {}) {
         .sort((a, b) => a.source.localeCompare(b.source));
     return { total: items.length, contextBudget: store.budget, items: items.slice(options.offset, options.offset + options.limit).map(({ content, ...item }) => ({ ...item, characters: content.length })) };
 }
+// Locate the archive history for an available scope.
 function historyFile(store, scope) {
     return store.safePath(store.scopeDirectory(scope), 'knowledge-history.jsonl');
 }
+// Read archive records and verify their scope, IDs and content hashes.
 function readHistory(store, scope) {
     const file = historyFile(store, scope);
     if (!fs.existsSync(file))
@@ -52,6 +55,7 @@ exports.historyOptions = zod_1.z.object({
     scope: store_1.scopeSchema.optional(), id: reference.shape.id.optional(), query: zod_1.z.string().max(1000).optional(),
     offset: zod_1.z.number().int().min(0).default(0), limit: zod_1.z.number().int().min(1).max(100).default(50)
 }).strict();
+// Search archived records and include original text when an ID is requested.
 function knowledgeHistory(store, input = {}) {
     const options = exports.historyOptions.parse(input);
     if (options.scope)

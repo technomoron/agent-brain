@@ -4,6 +4,7 @@ const path = require('node:path');
 const { parse, stringify } = require('yaml');
 const { parse: parseJsonc } = require('jsonc-parser');
 const binaryPrefix = '\0base64:';
+// Decode snapshot text or base64-encoded binary content.
 function fileContents(value) {
 	return value.startsWith(binaryPrefix)
 		? Buffer.from(value.slice(binaryPrefix.length), 'base64')
@@ -45,6 +46,7 @@ const coreSkills = new Set([
 const histories = new Set(['knowledge-history.jsonl', 'review-history.jsonl', 'review-counters.json']);
 const repoPattern = /^[a-z0-9][a-z0-9_.-]*\/[a-z0-9][a-z0-9_.-]*$/;
 const poolPattern = /^[a-zA-Z0-9][a-zA-Z0-9._-]*$/;
+// Validate explicit repository and pool deployment membership.
 function manifest(value) {
 	if (
 		!value ||
@@ -74,6 +76,7 @@ function manifest(value) {
 	if (!ids.size) throw Error('At least one repository is required');
 	return value;
 }
+// Read bounded configuration files and reject symlinks or known credentials.
 function readFile(root, relative) {
 	let current = root;
 	for (const part of relative.split('/')) {
@@ -93,6 +96,7 @@ function readFile(root, relative) {
 		throw Error('Possible credential in configuration: ' + relative);
 	return text;
 }
+// Collect configuration files recursively without following symlinks.
 function walk(root, relative, result) {
 	const directory = path.join(root, relative);
 	if (!fs.existsSync(directory)) return;
@@ -104,6 +108,7 @@ function walk(root, relative, result) {
 		else result[child] = readFile(root, child);
 	}
 }
+// Check scoped Markdown metadata and skill identities.
 function validateDocument(name, text) {
 	const parts = name.split('/');
 	const scope = parts[0] === 'global' ? 'global' : parts[0] === 'pools' ? 'pool' : 'project';
@@ -128,6 +133,7 @@ function validateDocument(name, text) {
 		throw Error('Findings must remain per repository: ' + name);
 	if (parts.includes('todo') && scope !== 'project') throw Error('Tasks must remain per repository: ' + name);
 }
+// Collect deployable configuration and map projects to server checkout paths.
 function readSnapshot(root, selection, { required = true, checkouts = '/var/lib/agent-mcp/checkouts' } = {}) {
 	const result = {};
 	let defaultChecks;
@@ -209,6 +215,7 @@ function readSnapshot(root, selection, { required = true, checkouts = '/var/lib/
 	for (const [name, text] of Object.entries(result)) validateDocument(name, text);
 	return result;
 }
+// Plan Git changes against live data without overwriting competing edits.
 function mergeSnapshots(base, live, incoming) {
 	const changes = {},
 		conflicts = [];

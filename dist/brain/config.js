@@ -15,6 +15,7 @@ const jsonc_parser_1 = require("jsonc-parser");
 const yaml_1 = require("yaml");
 const zod_1 = require("zod");
 const utils_1 = require("@technomoron/agent-run/dist/utils");
+// Choose a local socket or user-specific Windows pipe for this configuration.
 function defaultSocketPath(configRoot) {
     if (process.platform === 'win32') {
         const identity = `${os.homedir().toLowerCase()}\0${path.resolve(configRoot).toLowerCase()}`;
@@ -36,6 +37,7 @@ exports.brainConfigSchema = zod_1.z.object({
         zod_1.z.object({ type: zod_1.z.literal('trello'), board: zod_1.z.string().regex(/^[a-zA-Z0-9]+$/), keyEnv: zod_1.z.string().regex(/^[A-Z_][A-Z0-9_]*$/).default('TRELLO_API_KEY'), tokenEnv: zod_1.z.string().regex(/^[A-Z_][A-Z0-9_]*$/).default('TRELLO_TOKEN') }).strict()
     ])).default({})
 }).strict();
+// Read and validate optional Brain JSONC configuration.
 function readBrainConfig(root) {
     const file = path.join(root, 'brain.jsonc');
     if (!fs.existsSync(file))
@@ -55,10 +57,12 @@ exports.projectConfigSchema = zod_1.z.object({
     repository: zod_1.z.object({ url: zod_1.z.string() }).optional(),
     agent: zod_1.z.object({ default: zod_1.z.enum(['codex', 'claude', 'gemini', 'grok']).default('codex') }).default({ default: 'codex' })
 }).strict();
+// Read registered projects from the configuration tree.
 function listBrainProjects(configRoot) {
     const directory = path.join(configRoot, 'projects');
     if (!fs.existsSync(directory))
         return [];
+    // Find project configurations beneath this directory.
     function scan(parent) {
         return fs.readdirSync(parent, { withFileTypes: true }).filter((entry) => entry.isDirectory()).sort((a, b) => a.name.localeCompare(b.name)).flatMap((entry) => {
             const child = path.join(parent, entry.name);
@@ -75,12 +79,15 @@ function listBrainProjects(configRoot) {
     }
     return scan(directory);
 }
+// Find the profile registered under a project name.
 function namedBrainProfile(configRoot, name) {
     return listBrainProjects(configRoot).find((project) => project.name === name || project.profile === name)?.profile ?? null;
 }
+// Find the profile containing the current source directory.
 function registeredBrainProfile(configRoot, cwd) {
     return registeredBrainProject(configRoot, cwd)?.profile ?? null;
 }
+// Select the most specific registered source root and reject ties.
 function registeredBrainProject(configRoot, cwd) {
     const matches = listBrainProjects(configRoot).flatMap((project) => project.roots
         .filter((root) => (0, utils_1.isSamePathOrDescendant)(path.resolve(cwd), path.resolve(root)))

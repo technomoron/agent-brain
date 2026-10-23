@@ -8,10 +8,12 @@ const file = '/etc/agent-mcp/remote.jsonc',
 	lock = '/var/lib/agent-mcp/config-deploy/catalog.lock',
 	maintenance = '/run/agent-brain-config-deploy-maintenance';
 let interrupted = false;
+// Let deployment checkpoints detect termination requests and restore service availability.
 for (const signal of ['SIGTERM', 'SIGHUP', 'SIGINT'])
 	process.on(signal, () => {
 		interrupted = true;
 	});
+// Run a configuration deployment step as the Brain service user.
 function run(action, value) {
 	return execFileSync(
 		'/usr/sbin/runuser',
@@ -19,15 +21,18 @@ function run(action, value) {
 		{ encoding: 'utf8', timeout: 120000, maxBuffer: 1024 * 1024 }
 	);
 }
+// Control the Brain service through systemd.
 function service(action) {
 	execFileSync('/usr/bin/systemctl', [action, 'agent-mcp'], { timeout: 60000 });
 }
+// Atomically replace server configuration while preserving its group ownership.
 function save(text) {
 	const temporary = file + '.deploy.tmp';
 	fs.writeFileSync(temporary, text, { mode: 0o640 });
 	fs.chownSync(temporary, 0, fs.statSync(file).gid);
 	fs.renameSync(temporary, file);
 }
+// Wait for OAuth discovery and unauthenticated MCP rejection after deployment.
 async function healthy(config) {
 	const base = 'http://127.0.0.1:' + config.listen.port;
 	for (let attempt = 0; attempt < 40; attempt++) {
@@ -50,6 +55,7 @@ async function healthy(config) {
 	}
 	throw Error('Brain did not pass deployment health checks');
 }
+// Stage and activate a configuration push, restoring the previous state on failure.
 (async () => {
 	if (process.getuid?.() !== 0) throw Error('Deployment controller must run as root');
 	const match = /^deploy ([0-9a-f]{40})$/.exec(process.argv[2] ?? '');

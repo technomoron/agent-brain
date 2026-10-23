@@ -50,10 +50,12 @@ export function getSkills(store: BrainStore): Skill[] {
 	return [...skills.values()];
 }
 
+// List resolved skill metadata without loading content into the response.
 export function listSkills(store: BrainStore): Omit<Skill, 'content'>[] {
 	return getSkills(store).map(({ content: _content, ...skill }) => skill);
 }
 
+// Read a resolved skill by name or report that it is unavailable.
 export function getSkill(store: BrainStore, name: string): Skill {
 	const skill = getSkills(store).find((item) => item.name === name);
 	if (!skill) throw new Error(`Skill not found: ${name}`);

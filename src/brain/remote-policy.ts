@@ -26,6 +26,7 @@ export const remoteConfigSchema = z.object({
 }).strict();
 export type RemoteConfig = z.infer<typeof remoteConfigSchema>;
 
+// Validate remote configuration and its identity and repository relationships.
 export function readRemoteConfig(file: string): RemoteConfig {
 	const errors: ParseError[] = [];
 	const value: unknown = parseJsonc(fs.readFileSync(file, 'utf8'), errors, { allowTrailingComma: true });
@@ -53,12 +54,14 @@ export function readRemoteConfig(file: string): RemoteConfig {
 /** A declared group may share a root; unrelated groups and repositories must remain isolated. */
 export function validateRepositoryRoots(config: RemoteConfig, canonical = false): void {
 	if (config.dataRoot) {
+		// Resolve a configured root, following symlinks only for canonical validation.
 		const resolve = (value: string) => canonical ? fs.realpathSync(value) : path.resolve(value);
 		if (config.repositories.some((repo) => resolve(repo.configRoot) !== resolve(config.dataRoot!)) || config.groups.some((group) => resolve(group.configRoot) !== resolve(config.dataRoot!))) throw new Error('All repositories and pools must use the central dataRoot');
 		if (new Set(config.groups.map((group) => group.id)).size !== config.groups.length || config.repositories.some((repo) => repo.group && !config.groups.some((group) => group.id === repo.group))) throw new Error('Pool registration is invalid');
 		return;
 	}
 	if (new Set(config.groups.map((g) => g.id)).size !== config.groups.length) throw new Error('Group IDs must be unique');
+	// Resolve a configured root, following symlinks only for canonical validation.
 	const resolve = (value: string) => canonical ? fs.realpathSync(value) : path.resolve(value);
 	for (const repo of config.repositories) if (repo.group !== undefined) {
 		const group = config.groups.find((g) => g.id === repo.group);
@@ -68,11 +71,13 @@ export function validateRepositoryRoots(config: RemoteConfig, canonical = false)
 		...config.repositories.filter((r) => !r.group).map((r) => ({ identity: 'repo:' + r.id, root: resolve(r.configRoot) }))];
 	for (let i = 0; i < roots.length; i++) for (let j = i + 1; j < roots.length; j++) {
 		const a = roots[i]!.root, b = roots[j]!.root;
+		// Check whether one storage root contains another.
 		const overlaps = (from: string, to: string) => { const relative = path.relative(from, to); return !relative || (relative !== '..' && !relative.startsWith('..' + path.sep) && !path.isAbsolute(relative)); };
 		if (overlaps(a, b) || overlaps(b, a)) throw new Error('Repository and group data roots must be separate and non-overlapping');
 	}
 }
 
+// Check requested OAuth scopes against the current user and client grants.
 export function allowedGrant(config: RemoteConfig, subject: string, clientId: string, scopes: readonly string[]): boolean {
 	const user = config.users.find((u) => u.subject === subject && !u.disabled);
 	const client = config.clients.find((c) => c.id === clientId);
@@ -85,6 +90,7 @@ export function allowedGrant(config: RemoteConfig, subject: string, clientId: st
 			rule.permissions.includes(operation) && rule.repos.some((pattern) => coversPattern(pattern, repo)))));
 }
 
+// Intersect current user, client and token permissions for one repository.
 export function repositoryPermissions(config: RemoteConfig, subject: string, clientId: string, scopes: string[], repo: string): Set<Permission> {
 	const client = config.clients.find((c) => c.id === clientId);
 	const user = config.users.find((u) => u.subject === subject && !u.disabled);
@@ -97,6 +103,7 @@ export function repositoryPermissions(config: RemoteConfig, subject: string, cli
 
 const readTools = new Set(['list_repositories','list_repository_groups','brain_status','get_context','search_knowledge','list_knowledge','knowledge_history','get_knowledge','list_skills','get_skill','review_context','review_list','review_get','review_history','todo_list','todo_get']);
 const reviewTools = new Set(['review_create','review_update','resolve_review']);
+// Classify a tool by required permission and reject unsupported remote tools.
 export function toolPermission(name: string): Permission | null {
 	if (readTools.has(name)) return 'read';
 	if (reviewTools.has(name)) return 'review';

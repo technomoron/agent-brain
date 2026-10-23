@@ -28,11 +28,13 @@ export interface BrainServerOptions {
 	repositories?: RepositoryCatalog;
 }
 
+// Register Brain tools with backend selection and scope permissions.
 export function createBrainServer(store: BrainStore, options: BrainServerOptions = {}): McpServer {
 	const github = githubReviews(store);
 	if (github && options.repository && github.repository !== options.repository) throw new Error('Review backend repository does not match the authenticated repository');
 	const server = new McpServer({ name: 'agent-brain', version: packageVersion() });
 	registerRepositoryTools(server, options.repositories ?? (() => localRepositoryCatalog(store.configRoot)), options.allowTool);
+	// Register a validated tool with permission checks and broken-file diagnostics.
 	function tool<T extends z.ZodRawShape>(name: string, description: string, shape: T, readOnly: boolean, handler: (input: z.output<z.ZodObject<T>>) => unknown): void {
 		if (options.allowTool && !options.allowTool(name)) return;
 		const schema: z.ZodType = z.object(shape).strict();
@@ -148,11 +150,13 @@ export function createBrainServer(store: BrainStore, options: BrainServerOptions
 	return server;
 }
 
+// Require a private socket directory owned by the current user.
 function requirePrivateSocketDirectory(socketPath: string): void {
 	const stat = fs.lstatSync(path.dirname(socketPath));
 	if (!stat.isDirectory() || stat.uid !== process.getuid!() || (stat.mode & 0o077) !== 0) throw new Error(`The socket directory ${path.dirname(socketPath)} must be owned by the current user with mode 0700 (current uid ${process.getuid!()}, owner uid ${stat.uid}, mode ${(stat.mode & 0o777).toString(8)}). Run agent-run and agent-brain as the same user.`);
 }
 
+// Serve local MCP requests through a private socket or Windows pipe.
 export async function serveApiCore(configRoot: string, socketPath: string): Promise<{ close: () => Promise<void> }> {
 	if (process.platform !== 'win32') {
 		const directory = path.dirname(socketPath);
@@ -182,16 +186,21 @@ export async function serveApiCore(configRoot: string, socketPath: string): Prom
 			await transport.handleRequest(request.raw, reply.raw, request.body);
 		} finally { await server.close(); store.close(); }
 	});
-	api.fastify.route({ method: ['GET', 'DELETE'], url: '/mcp', handler: async (_request, reply) => reply.code(405).send() });
+	api.fastify.route({ method: ['GET', 'DELETE'], url: '/mcp',
+		// Reject unsupported HTTP methods on the local MCP endpoint.
+		handler: async (_request, reply) => reply.code(405).send() });
 	await api.fastify.listen({ path: socketPath });
 	try {
 		if (process.platform === 'win32') await checkWindowsPipe(socketPath, true);
 		else fs.chmodSync(socketPath, 0o600);
 		ready = true;
 	} catch (error) { await api.fastify.close(); throw error; }
-	return { close: () => api.fastify.close() };
+	return {
+		// Close the local API listener.
+		close: () => api.fastify.close() };
 }
 
+// Bridge MCP standard input and output to the private local service.
 export async function proxyStdio(socketPath: string, cwd: string, configRoot: string): Promise<void> {
 	if (process.platform === 'win32') {
 		try { await checkWindowsPipe(socketPath); }
@@ -205,6 +214,7 @@ export async function proxyStdio(socketPath: string, cwd: string, configRoot: st
 	}
 	const stdio = new StdioServerTransport();
 	let protocolVersion: string | undefined;
+	// Forward one MCP message and relay its validated response.
 	async function send(message: JSONRPCMessage): Promise<void> {
 		const response = await new Promise<string>((resolve, reject) => {
 			const request = http.request({ socketPath, path: '/mcp', method: 'POST', headers: {
@@ -229,6 +239,7 @@ export async function proxyStdio(socketPath: string, cwd: string, configRoot: st
 			await stdio.send(parsed);
 		}
 	}
+	// Relay client messages and report forwarding failures through JSON-RPC or stderr.
 	stdio.onmessage = (message) => { void send(message).catch(async (error: unknown) => {
 		if ('id' in message && 'method' in message) await stdio.send({ jsonrpc: '2.0', id: message.id, error: { code: -32603, message: error instanceof Error ? error.message : String(error) } });
 		else process.stderr.write(`${String(error)}\n`);

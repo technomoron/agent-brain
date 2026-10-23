@@ -8,6 +8,7 @@ const githubIssue = z.object({ number: z.number().int(), title: z.string(), body
 const trelloCard = z.object({ id: z.string(), name: z.string(), desc: z.string(), closed: z.boolean(), dueComplete: z.boolean(), due: z.string().nullable(),
 	url: z.url(), labels: z.array(z.object({ name: z.string() })) });
 
+// Fetch connector JSON with bounded requests and sanitized network errors.
 async function readRemote(url: URL, headers: Record<string, string>): Promise<unknown> {
 	let response: Response;
 	try { response = await fetch(url, { headers, redirect: 'error', signal: AbortSignal.timeout(30000) }); }
@@ -16,6 +17,7 @@ async function readRemote(url: URL, headers: Record<string, string>): Promise<un
 	return response.json();
 }
 
+// Import configured GitHub issues or Trello cards as local tasks.
 export async function syncConnector(store: BrainStore, name: string, scope: Scope): Promise<ReturnType<typeof importTodos>> {
 	store.scopeDirectory(scope);
 	const connector = readBrainConfig(store.configRoot)?.connectors[name];

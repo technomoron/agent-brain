@@ -9,6 +9,7 @@ const path = require("node:path");
 const node_child_process_1 = require("node:child_process");
 const store_1 = require("./store");
 const config_1 = require("./config");
+// Run noninteractive Git commands and report failures.
 function git(root, args) {
     const result = (0, node_child_process_1.spawnSync)('git', ['-C', root, ...args], { encoding: 'utf8', shell: false, timeout: 60000,
         env: { ...process.env, PATH: process.env.AGENT_RUN_REAL_PATH ?? process.env.PATH, GIT_TERMINAL_PROMPT: '0' }, maxBuffer: 16 * 1024 * 1024 });
@@ -16,11 +17,13 @@ function git(root, args) {
         throw new Error(`git ${args[0]} failed: ${result.error?.message ?? result.stderr.trim()}`);
     return result.stdout.trimEnd();
 }
+// Require the configuration directory to be the Git repository root.
 function requireRepository(store) {
     if (fs.realpathSync(git(store.configRoot, ['rev-parse', '--show-toplevel'])) !== fs.realpathSync(store.configRoot)) {
         throw new Error('Git sync requires the configuration directory itself to be the repository root.');
     }
 }
+// Report configuration Git state, conflicts and branch.
 function gitStatus(store) {
     if (!fs.existsSync(path.join(store.configRoot, '.git')))
         return { state: 'uninitialized', files: [], conflicts: [], branch: '' };
@@ -58,6 +61,7 @@ function syncableFiles(store) {
         files.push(ignore);
     return [...new Set(files.map((file) => path.relative(store.configRoot, file)))].sort();
 }
+// Save, pull or push canonical configuration under the Brain write lock.
 function syncGit(store, action, message) {
     return store.writeLocked(() => {
         const steps = [];
@@ -113,9 +117,11 @@ function syncGit(store, action, message) {
         }
     });
 }
+// Show Git state and canonical files eligible for synchronization.
 function gitPreview(store) {
     return { status: gitStatus(store), files: syncableFiles(store) };
 }
+// Fast-forward clean configuration at startup without blocking service availability.
 function pullOnStart(store) {
     try {
         return store.writeLocked(() => {

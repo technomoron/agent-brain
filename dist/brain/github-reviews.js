@@ -18,15 +18,18 @@ const metadata = zod_1.z.object({ key: zod_1.z.string(), severity: store_1.sever
 const issueSchema = zod_1.z.object({ number: zod_1.z.number().int().positive(), title: zod_1.z.string(), body: zod_1.z.string().nullable(),
     state: zod_1.z.enum(['open', 'closed']), state_reason: zod_1.z.string().nullable().optional(), html_url: zod_1.z.string().url(),
     updated_at: zod_1.z.string(), pull_request: zod_1.z.unknown().optional() });
+// Hash review content for revisions and repository-specific retry files.
 const hash = (value) => (0, node_crypto_1.createHash)('sha256').update(value).digest('hex');
 const start = '<!-- agent-mcp-review:start -->';
 const end = '<!-- agent-mcp-review:end -->';
 class GithubReviews {
+    // Bind the review backend to its store, configuration and GitHub repository.
     constructor(store, config, repository) {
         this.store = store;
         this.config = config;
         this.repository = repository;
     }
+    // Send an authenticated GitHub issue request with time and size limits.
     async request(route, method = 'GET', body) {
         const token = process.env[this.config.tokenEnv];
         if (!token)
@@ -43,6 +46,7 @@ class GithubReviews {
             throw new Error('GitHub response exceeds 4 MiB');
         return JSON.parse(text);
     }
+    // Extract managed review metadata from an ordinary GitHub issue.
     data(issue) {
         if (issue.pull_request)
             return null;
@@ -64,6 +68,7 @@ class GithubReviews {
             title: issue.title, content: body, state: issue.state === 'open' ? 'open' : issue.state_reason === 'not_planned' ? 'wontfix' : 'fixed',
             url: issue.html_url, revision: hash(JSON.stringify(issue)), backend: 'github' };
     }
+    // Page through managed findings and sort them by severity.
     async list(state = 'open') {
         const found = [];
         for (let page = 1; page <= 100; page++) {
@@ -78,6 +83,7 @@ class GithubReviews {
         }
         throw new Error('GitHub review listing exceeds 100 pages; narrow the repository backlog before retrying');
     }
+    // Extract an issue number belonging to the configured repository.
     number(id) {
         const prefix = 'github:' + this.repository + '#';
         const number = id.startsWith(prefix) ? id.slice(prefix.length) : id.replace(/^#/, '');
@@ -85,12 +91,14 @@ class GithubReviews {
             throw new Error('Issue must belong to the configured repository');
         return number;
     }
+    // Read a managed GitHub finding by its issue identity.
     async get(id) {
         const item = this.data(issueSchema.parse(await this.request('/' + this.number(id))));
         if (!item)
             throw new Error('Issue is not an agent-mcp review finding');
         return item;
     }
+    // Serialize GitHub writes and enforce the explicit write gate.
     async locked(work) {
         if (!this.config.writesEnabled)
             throw new Error('GitHub review writes are disabled; configure writesEnabled explicitly');
@@ -104,12 +112,14 @@ class GithubReviews {
             fs.unlinkSync(lock);
         }
     }
+    // Encode a finding inside the reserved GitHub review markers.
     block(input) {
         if (input.content.includes('<!-- agent-mcp-'))
             throw new Error('Finding content contains a reserved marker');
         const encoded = Buffer.from(JSON.stringify({ key: input.key, severity: input.severity, applies_to: input.applies_to })).toString('base64url');
         return start + '\n<!-- agent-mcp-meta:' + encoded + ' -->\nSeverity: ' + input.severity + '\n\n' + input.content + '\n' + end;
     }
+    // Create a finding or return the issue already associated with its retry key.
     async create(input) {
         input = exports.reviewInput.parse(input);
         return this.locked(async () => {
@@ -133,6 +143,7 @@ class GithubReviews {
             return { ...item, created: true };
         });
     }
+    // Revise the managed finding while preserving unrelated issue content.
     async update(id, revision, changes) {
         return this.locked(async () => {
             const current = await this.get(id);
@@ -145,6 +156,7 @@ class GithubReviews {
             return this.data(issue);
         });
     }
+    // Close a current finding with its resolution reason.
     async resolve(id, revision, state, reason) {
         return this.locked(async () => {
             const current = await this.get(id);
@@ -158,6 +170,7 @@ class GithubReviews {
     }
 }
 exports.GithubReviews = GithubReviews;
+// Load the optional GitHub review backend for the active profile.
 function githubReviews(store) {
     const file = store.safePath(store.profile ?? 'default', 'review.jsonc');
     if (!fs.existsSync(file))

@@ -6,6 +6,7 @@ import { readMarkdown } from './store';
 const directory = path.resolve(__dirname, '..', '..', 'skills');
 const metadata = z.object({ name: z.string(), description: z.string().min(1) });
 
+// Read and validate a bundled skill by name.
 export function readBuiltInSkill(name: string): { description: string; content: string } {
 	if (!/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/.test(name)) throw new Error(`Invalid built-in skill name: ${name}`);
 	const document = readMarkdown(fs.readFileSync(path.join(directory, name, 'SKILL.md'), 'utf8'));
@@ -14,6 +15,7 @@ export function readBuiltInSkill(name: string): { description: string; content: 
 	return { description: parsed.description, content: document.content };
 }
 
+// Load all bundled skills in name order.
 export function readBuiltInSkills(): Record<string, { description: string; content: string }> {
 	return Object.fromEntries(fs.readdirSync(directory, { withFileTypes: true })
 		.filter((entry) => entry.isDirectory()).sort((a, b) => a.name.localeCompare(b.name))

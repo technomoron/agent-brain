@@ -30,6 +30,7 @@ exports.remoteConfigSchema = zod_1.z.object({
     groups: zod_1.z.array(zod_1.z.object({ id: zod_1.z.string().regex(/^[a-zA-Z0-9][a-zA-Z0-9._-]*$/), configRoot: absolute }).strict()).default([]),
     repositories: zod_1.z.array(zod_1.z.object({ id: repositories_1.repositoryId, configRoot: absolute, cwd: absolute, group: zod_1.z.string().optional() }).strict())
 }).strict();
+// Validate remote configuration and its identity and repository relationships.
 function readRemoteConfig(file) {
     const errors = [];
     const value = (0, jsonc_parser_1.parse)(fs.readFileSync(file, 'utf8'), errors, { allowTrailingComma: true });
@@ -66,6 +67,7 @@ function readRemoteConfig(file) {
 /** A declared group may share a root; unrelated groups and repositories must remain isolated. */
 function validateRepositoryRoots(config, canonical = false) {
     if (config.dataRoot) {
+        // Resolve a configured root, following symlinks only for canonical validation.
         const resolve = (value) => canonical ? fs.realpathSync(value) : path.resolve(value);
         if (config.repositories.some((repo) => resolve(repo.configRoot) !== resolve(config.dataRoot)) || config.groups.some((group) => resolve(group.configRoot) !== resolve(config.dataRoot)))
             throw new Error('All repositories and pools must use the central dataRoot');
@@ -75,6 +77,7 @@ function validateRepositoryRoots(config, canonical = false) {
     }
     if (new Set(config.groups.map((g) => g.id)).size !== config.groups.length)
         throw new Error('Group IDs must be unique');
+    // Resolve a configured root, following symlinks only for canonical validation.
     const resolve = (value) => canonical ? fs.realpathSync(value) : path.resolve(value);
     for (const repo of config.repositories)
         if (repo.group !== undefined) {
@@ -87,11 +90,13 @@ function validateRepositoryRoots(config, canonical = false) {
     for (let i = 0; i < roots.length; i++)
         for (let j = i + 1; j < roots.length; j++) {
             const a = roots[i].root, b = roots[j].root;
+            // Check whether one storage root contains another.
             const overlaps = (from, to) => { const relative = path.relative(from, to); return !relative || (relative !== '..' && !relative.startsWith('..' + path.sep) && !path.isAbsolute(relative)); };
             if (overlaps(a, b) || overlaps(b, a))
                 throw new Error('Repository and group data roots must be separate and non-overlapping');
         }
 }
+// Check requested OAuth scopes against the current user and client grants.
 function allowedGrant(config, subject, clientId, scopes) {
     const user = config.users.find((u) => u.subject === subject && !u.disabled);
     const client = config.clients.find((c) => c.id === clientId);
@@ -105,6 +110,7 @@ function allowedGrant(config, subject, clientId, scopes) {
         operations.every((operation) => client.permissions.includes(operation) && config.access.some((rule) => rule.subject === subject &&
             rule.permissions.includes(operation) && rule.repos.some((pattern) => (0, repositories_1.coversPattern)(pattern, repo)))));
 }
+// Intersect current user, client and token permissions for one repository.
 function repositoryPermissions(config, subject, clientId, scopes, repo) {
     const client = config.clients.find((c) => c.id === clientId);
     const user = config.users.find((u) => u.subject === subject && !u.disabled);
@@ -117,6 +123,7 @@ function repositoryPermissions(config, subject, clientId, scopes, repo) {
 }
 const readTools = new Set(['list_repositories', 'list_repository_groups', 'brain_status', 'get_context', 'search_knowledge', 'list_knowledge', 'knowledge_history', 'get_knowledge', 'list_skills', 'get_skill', 'review_context', 'review_list', 'review_get', 'review_history', 'todo_list', 'todo_get']);
 const reviewTools = new Set(['review_create', 'review_update', 'resolve_review']);
+// Classify a tool by required permission and reject unsupported remote tools.
 function toolPermission(name) {
     if (readTools.has(name))
         return 'read';

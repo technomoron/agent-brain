@@ -17,6 +17,7 @@ const todos_1 = require("./todos");
 const connectors_1 = require("./connectors");
 const git_1 = require("./git");
 const github_reviews_1 = require("./github-reviews");
+// Parse CLI arguments and run the requested Brain command.
 async function brainMain(argv, wrapperCommand) {
     const { values, positionals } = (0, node_util_1.parseArgs)({ args: argv, allowPositionals: true, strict: true, options: {
             configdir: { type: 'string' }, cwd: { type: 'string' }, socket: { type: 'string' },
@@ -43,6 +44,7 @@ async function brainMain(argv, wrapperCommand) {
     }
     if (values.pull && command !== 'serve')
         throw new Error('--pull is only supported by serve');
+    // Print a JSON result to standard output.
     const print = (value) => { process.stdout.write(`${JSON.stringify(value, null, 2)}\n`); };
     if (values.help || command === 'help') {
         process.stdout.write([
@@ -102,6 +104,7 @@ async function brainMain(argv, wrapperCommand) {
             const service = await serveApiCore(root, socket);
             process.stderr.write(`agent-brain listening on ${socket}\n`);
             let closing = false;
+            // Close the local service once and report shutdown failures.
             const close = () => { if (!closing) {
                 closing = true;
                 void service.close().catch((error) => { process.stderr.write(`${String(error)}\n`); process.exitCode = 1; });
@@ -115,12 +118,16 @@ async function brainMain(argv, wrapperCommand) {
         return;
     }
     const store = new store_1.BrainStore(root, cwd);
+    // Require an item ID at the requested argument position.
     const requireId = (index = 0) => { const id = positionals[index]; if (!id)
         throw new Error('An item id is required'); return id; };
+    // Require the revision supplied for an update.
     const requireRevision = () => { if (!values.revision)
         throw new Error('--revision is required; read the item first'); return values.revision; };
+    // Parse the required JSON command argument.
     const json = () => { if (!values.json)
         throw new Error('--json is required'); return JSON.parse(values.json); };
+    // Print a result with any broken-file diagnostics.
     const report = (value) => print(store.withDiagnostics(value));
     try {
         switch (command) {
@@ -259,6 +266,7 @@ async function brainMain(argv, wrapperCommand) {
         store.close();
     }
 }
+// Print a command failure and set the process exit status.
 function reportBrainError(error) {
     process.stderr.write(`agent-brain: ${error instanceof Error ? error.message : String(error)}\n`);
     process.exitCode = 1;

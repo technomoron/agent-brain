@@ -58,6 +58,7 @@ test('configuration snapshot ignores unserved projects and MCP-owned skills and 
 		pools: ['customer'],
 		repositories: [{ id: 'owner/repo', pool: 'customer' }]
 	};
+	// Write test content after creating its parent directories.
 	function write(name, text) {
 		const file = path.join(root, name);
 		fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -97,15 +98,19 @@ test('export respects scope and review permissions, preserves Git-only changes a
 test('real Git export commits, pushes, avoids duplicate commits and retains live data on push failure', t => {
  const {execFileSync}=require('node:child_process');
  const root=fs.mkdtempSync(path.join(os.tmpdir(),'brain-export-'));t.after(()=>fs.rmSync(root,{recursive:true,force:true}));
+ // Run a Git command and require it to succeed.
  const git=(dir,...args)=>execFileSync('git',['-C',dir,...args],{encoding:'utf8',stdio:['ignore','pipe','pipe']}).trim();
  const remote=path.join(root,'origin.git'),catalog=path.join(root,'catalog'),dataRoot=path.join(root,'data'),state=path.join(root,'state');
  fs.mkdirSync(remote);git(remote,'init','--bare','--initial-branch=main');fs.mkdirSync(catalog);git(catalog,'init','--initial-branch=main');
  git(catalog,'config','user.name','Test User');git(catalog,'config','user.email','test@example.invalid');git(catalog,'remote','add','origin',remote);
+ // Write test content after creating its parent directories.
  const write=(base,name,text)=>{const file=path.join(base,name);fs.mkdirSync(path.dirname(file),{recursive:true});fs.writeFileSync(file,text);};
  const selection={version:1,pools:['customer'],repositories:[{id:'owner/repo',pool:'customer'}]};
  write(catalog,'.brain-deploy.json',JSON.stringify(selection));write(catalog,'projects/owner/repo/config.yaml','name: owner/repo\npool: customer\nroots: [/source]\n');
  const name='projects/owner/repo/memory/note.md';write(catalog,name,'Original');git(catalog,'add','.');git(catalog,'commit','-m','Initial');git(catalog,'push','-u','origin','main');
- fs.cpSync(catalog,dataRoot,{recursive:true,filter:p=>!p.includes(path.sep+'.git')});fs.mkdirSync(path.join(dataRoot,'runtime'));fs.mkdirSync(state);
+ fs.cpSync(catalog,dataRoot,{recursive:true,
+ // Exclude Git metadata from the test data copy.
+ filter:p=>!p.includes(path.sep+'.git')});fs.mkdirSync(path.join(dataRoot,'runtime'));fs.mkdirSync(state);
  write(state,'baseline.json',JSON.stringify({files:readSnapshot(catalog,selection)}));write(dataRoot,name,'Brain change');
  const opts={catalog,dataRoot,state,scopes:['projects/owner/repo']};
  const first=exportSync(opts);assert.equal(first.files,1);assert(first.commit);assert.equal(git(remote,'show','main:'+name),'Brain change');

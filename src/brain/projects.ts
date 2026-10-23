@@ -11,6 +11,7 @@ import { listBrainProjects, projectConfigSchema } from './config';
 import { BrainStore, knowledgeDirectories } from './store';
 
 
+// Initialize external Brain storage, templates and profile directories.
 export function initializeBrain(configRoot: string, cwd: string): void {
 	if (isSamePathOrDescendant(path.resolve(configRoot), findProjectRoot(cwd))) throw new Error('Brain configuration must live outside the source repository.');
 	ensureConfigRootLayout(configRoot);
@@ -36,12 +37,14 @@ export function initializeBrain(configRoot: string, cwd: string): void {
 	} finally { store.close(); }
 }
 
+// Create the knowledge, skill, task and template directories for a scope.
 function initializeScopeDirectories(store: BrainStore, directory: string): void {
 	for (const folder of [...Object.values(knowledgeDirectories), 'skills', 'todo', 'templates']) {
 		store.directory(directory, folder);
 	}
 }
 
+// Detect source languages, package scripts and the Git origin.
 export function inspectProject(cwd: string): Record<string, unknown> {
 	const root = findProjectRoot(cwd);
 	const git = spawnSync('git', ['-C', root, 'config', '--get', 'remote.origin.url'], { encoding: 'utf8', shell: false });
@@ -55,6 +58,7 @@ export function inspectProject(cwd: string): Record<string, unknown> {
 		documents: ['README.md', 'AGENTS.md', 'CLAUDE.md'].filter((file) => fs.existsSync(path.join(root, file))), scripts };
 }
 
+// Register a source project using detected or interactively supplied settings.
 export async function createBrainProject(configRoot: string, cwd: string, name: string, mode: 'quick' | 'normal' | 'guided'): Promise<void> {
 	projectConfigSchema.shape.name.parse(name);
 	const detected = inspectProject(cwd);

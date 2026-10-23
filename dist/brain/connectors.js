@@ -8,6 +8,7 @@ const githubIssue = zod_1.z.object({ number: zod_1.z.number().int(), title: zod_
     html_url: zod_1.z.url(), pull_request: zod_1.z.unknown().optional(), labels: zod_1.z.array(zod_1.z.union([zod_1.z.string(), zod_1.z.object({ name: zod_1.z.string() })])) });
 const trelloCard = zod_1.z.object({ id: zod_1.z.string(), name: zod_1.z.string(), desc: zod_1.z.string(), closed: zod_1.z.boolean(), dueComplete: zod_1.z.boolean(), due: zod_1.z.string().nullable(),
     url: zod_1.z.url(), labels: zod_1.z.array(zod_1.z.object({ name: zod_1.z.string() })) });
+// Fetch connector JSON with bounded requests and sanitized network errors.
 async function readRemote(url, headers) {
     let response;
     try {
@@ -20,6 +21,7 @@ async function readRemote(url, headers) {
         throw new Error(`Connector ${url.hostname} returned HTTP ${response.status}`);
     return response.json();
 }
+// Import configured GitHub issues or Trello cards as local tasks.
 async function syncConnector(store, name, scope) {
     store.scopeDirectory(scope);
     const connector = (0, config_1.readBrainConfig)(store.configRoot)?.connectors[name];

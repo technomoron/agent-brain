@@ -12,9 +12,13 @@ export GEMINI_CLI_HOME="$HOME"
 export GROK_HOME="$HOME/.grok"
 mkdir -p "$HOME"
 trap 'if [ -n "$BRAIN_TEST_PID" ]; then kill "$BRAIN_TEST_PID" 2>/dev/null || true; wait "$BRAIN_TEST_PID" 2>/dev/null || true; fi; rm -rf "$TMP_DIR"' EXIT
+# Report a failed test assertion and stop the script.
 fail() { echo "FAIL $*" >&2; exit 1; }
+# Require the expected literal text in a test output file.
 assert_contains() { grep -Fq -- "$2" "$1" || { cat "$1" >&2; fail "expected '$2' in $1"; }; }
+# Reject unexpected literal text in a test output file.
 assert_not_contains() { ! grep -Fq -- "$2" "$1" || fail "unexpected '$2' in $1"; }
+# Require a test path to remain absent.
 assert_no_file() { [ ! -f "$1" ] || fail "unexpected file: $1"; }
 EXAMPLE="$TMP_DIR/basic-config"
 cp -R "$ROOT/examples/basic-config" "$EXAMPLE"

@@ -25,12 +25,14 @@ const windows_pipe_1 = require("./windows-pipe");
 const repository_discovery_1 = require("./repository-discovery");
 var config_1 = require("./config");
 Object.defineProperty(exports, "defaultSocketPath", { enumerable: true, get: function () { return config_1.defaultSocketPath; } });
+// Register Brain tools with backend selection and scope permissions.
 function createBrainServer(store, options = {}) {
     const github = (0, github_reviews_1.githubReviews)(store);
     if (github && options.repository && github.repository !== options.repository)
         throw new Error('Review backend repository does not match the authenticated repository');
     const server = new mcp_js_1.McpServer({ name: 'agent-brain', version: (0, version_1.packageVersion)() });
     (0, repository_discovery_1.registerRepositoryTools)(server, options.repositories ?? (() => (0, repository_discovery_1.localRepositoryCatalog)(store.configRoot)), options.allowTool);
+    // Register a validated tool with permission checks and broken-file diagnostics.
     function tool(name, description, shape, readOnly, handler) {
         if (options.allowTool && !options.allowTool(name))
             return;
@@ -159,11 +161,13 @@ function createBrainServer(store, options = {}) {
     }
     return server;
 }
+// Require a private socket directory owned by the current user.
 function requirePrivateSocketDirectory(socketPath) {
     const stat = fs.lstatSync(path.dirname(socketPath));
     if (!stat.isDirectory() || stat.uid !== process.getuid() || (stat.mode & 0o077) !== 0)
         throw new Error(`The socket directory ${path.dirname(socketPath)} must be owned by the current user with mode 0700 (current uid ${process.getuid()}, owner uid ${stat.uid}, mode ${(stat.mode & 0o777).toString(8)}). Run agent-run and agent-brain as the same user.`);
 }
+// Serve local MCP requests through a private socket or Windows pipe.
 async function serveApiCore(configRoot, socketPath) {
     if (process.platform !== 'win32') {
         const directory = path.dirname(socketPath);
@@ -209,7 +213,9 @@ async function serveApiCore(configRoot, socketPath) {
             store.close();
         }
     });
-    api.fastify.route({ method: ['GET', 'DELETE'], url: '/mcp', handler: async (_request, reply) => reply.code(405).send() });
+    api.fastify.route({ method: ['GET', 'DELETE'], url: '/mcp',
+        // Reject unsupported HTTP methods on the local MCP endpoint.
+        handler: async (_request, reply) => reply.code(405).send() });
     await api.fastify.listen({ path: socketPath });
     try {
         if (process.platform === 'win32')
@@ -222,8 +228,12 @@ async function serveApiCore(configRoot, socketPath) {
         await api.fastify.close();
         throw error;
     }
-    return { close: () => api.fastify.close() };
+    return {
+        // Close the local API listener.
+        close: () => api.fastify.close()
+    };
 }
+// Bridge MCP standard input and output to the private local service.
 async function proxyStdio(socketPath, cwd, configRoot) {
     if (process.platform === 'win32') {
         try {
@@ -243,6 +253,7 @@ async function proxyStdio(socketPath, cwd, configRoot) {
     }
     const stdio = new stdio_js_1.StdioServerTransport();
     let protocolVersion;
+    // Forward one MCP message and relay its validated response.
     async function send(message) {
         const response = await new Promise((resolve, reject) => {
             const request = http.request({ socketPath, path: '/mcp', method: 'POST', headers: {
@@ -271,6 +282,7 @@ async function proxyStdio(socketPath, cwd, configRoot) {
             await stdio.send(parsed);
         }
     }
+    // Relay client messages and report forwarding failures through JSON-RPC or stderr.
     stdio.onmessage = (message) => {
         void send(message).catch(async (error) => {
             if ('id' in message && 'method' in message)

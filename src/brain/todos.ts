@@ -20,10 +20,13 @@ const remoteTask = todoInput.pick({ title: true, description: true, status: true
 const todoMetadata = todoInput.omit({ description: true }).extend({ id: z.uuid(), created: z.string(), updated: z.string(), remote: remoteTask.optional() });
 export type Todo = z.infer<typeof todoMetadata> & { description: string; revision: string };
 
+// Read scoped tasks and report malformed or duplicate records.
 export function listTodos(store: BrainStore): Todo[] {
 	store.todoErrors.length = 0;
 	const sources = new Map<Todo, string>();
-	const todos = store.scopes.filter((entry) => !store.pool || entry.scope === 'project').flatMap(({ scope, directory }) => store.files(path.join(directory, 'todo'), { onError: (file, error) => store.todoErrors.push(store.brokenFile(file, error)) }).flatMap((file) => {
+	const todos = store.scopes.filter((entry) => !store.pool || entry.scope === 'project').flatMap(({ scope, directory }) => store.files(path.join(directory, 'todo'), {
+		// Collect unreadable task paths for the current scan.
+		onError: (file, error) => store.todoErrors.push(store.brokenFile(file, error)) }).flatMap((file) => {
 		let id: string | undefined;
 		try {
 			const text = store.read(file);
@@ -47,6 +50,7 @@ export function listTodos(store: BrainStore): Todo[] {
 	});
 }
 
+// Read a task by ID and reject broken or missing records.
 export function getTodo(store: BrainStore, id: string): Todo {
 	const todo = listTodos(store).find((item) => item.id === id);
 	store.assertReadable(id, store.todoErrors);
@@ -54,6 +58,7 @@ export function getTodo(store: BrainStore, id: string): Todo {
 	return todo;
 }
 
+// Write task metadata and description and return its new revision.
 function writeTodo(store: BrainStore, todo: Omit<Todo, 'revision'>): Todo {
 	const { description, ...metadata } = todo;
 	const text = `---\n${stringifyYaml(metadata)}---\n\n${description}\n`;
@@ -61,6 +66,7 @@ function writeTodo(store: BrainStore, todo: Omit<Todo, 'revision'>): Todo {
 	return { ...todo, revision: createHash('sha256').update(text).digest('hex') };
 }
 
+// Create a repository task or reuse its existing external identity.
 export function addTodo(store: BrainStore, input: z.input<typeof todoInput>): Todo {
 	const value = todoInput.parse(input);
 	if (value.scope === 'pool' || (store.pool && value.scope !== 'project')) throw new Error('Tasks must belong to an individual repository');
@@ -87,6 +93,7 @@ export const todoChanges = z.object({
 	labels: z.array(z.string()).optional(),
 	notes: z.string().optional()
 }).strict();
+// Apply validated task changes only to the expected revision.
 export function updateTodo(store: BrainStore, id: string, revision: string, changes: z.input<typeof todoChanges>): Todo {
 	const parsed = todoChanges.parse(changes);
 	return store.writeLocked(() => {
@@ -97,6 +104,7 @@ export function updateTodo(store: BrainStore, id: string, revision: string, chan
 	});
 }
 
+// Merge external task changes while retaining local edits and reporting conflicts.
 export function importTodos(store: BrainStore, input: z.input<typeof todoInput>[]): { imported: string[]; updated: string[]; conflicts: string[] } {
 	const incoming = input.map((item) => todoInput.parse(item));
 	return store.writeLocked(() => {

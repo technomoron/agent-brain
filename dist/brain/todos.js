@@ -25,10 +25,14 @@ exports.todoInput = zod_1.z.object({
 }).strict();
 const remoteTask = exports.todoInput.pick({ title: true, description: true, status: true, labels: true, due: true }).strip();
 const todoMetadata = exports.todoInput.omit({ description: true }).extend({ id: zod_1.z.uuid(), created: zod_1.z.string(), updated: zod_1.z.string(), remote: remoteTask.optional() });
+// Read scoped tasks and report malformed or duplicate records.
 function listTodos(store) {
     store.todoErrors.length = 0;
     const sources = new Map();
-    const todos = store.scopes.filter((entry) => !store.pool || entry.scope === 'project').flatMap(({ scope, directory }) => store.files(path.join(directory, 'todo'), { onError: (file, error) => store.todoErrors.push(store.brokenFile(file, error)) }).flatMap((file) => {
+    const todos = store.scopes.filter((entry) => !store.pool || entry.scope === 'project').flatMap(({ scope, directory }) => store.files(path.join(directory, 'todo'), {
+        // Collect unreadable task paths for the current scan.
+        onError: (file, error) => store.todoErrors.push(store.brokenFile(file, error))
+    }).flatMap((file) => {
         let id;
         try {
             const text = store.read(file);
@@ -59,6 +63,7 @@ function listTodos(store) {
         return false;
     });
 }
+// Read a task by ID and reject broken or missing records.
 function getTodo(store, id) {
     const todo = listTodos(store).find((item) => item.id === id);
     store.assertReadable(id, store.todoErrors);
@@ -66,12 +71,14 @@ function getTodo(store, id) {
         throw new Error(`Todo not found: ${id}`);
     return todo;
 }
+// Write task metadata and description and return its new revision.
 function writeTodo(store, todo) {
     const { description, ...metadata } = todo;
     const text = `---\n${(0, yaml_1.stringify)(metadata)}---\n\n${description}\n`;
     store.atomicWrite(path.join(store.scopeDirectory(todo.scope), 'todo', `${todo.id}.md`), text);
     return { ...todo, revision: (0, node_crypto_1.createHash)('sha256').update(text).digest('hex') };
 }
+// Create a repository task or reuse its existing external identity.
 function addTodo(store, input) {
     const value = exports.todoInput.parse(input);
     if (value.scope === 'pool' || (store.pool && value.scope !== 'project'))
@@ -100,6 +107,7 @@ exports.todoChanges = zod_1.z.object({
     labels: zod_1.z.array(zod_1.z.string()).optional(),
     notes: zod_1.z.string().optional()
 }).strict();
+// Apply validated task changes only to the expected revision.
 function updateTodo(store, id, revision, changes) {
     const parsed = exports.todoChanges.parse(changes);
     return store.writeLocked(() => {
@@ -110,6 +118,7 @@ function updateTodo(store, id, revision, changes) {
         return writeTodo(store, { ...value, ...parsed, updated: new Date().toISOString() });
     });
 }
+// Merge external task changes while retaining local edits and reporting conflicts.
 function importTodos(store, input) {
     const incoming = input.map((item) => exports.todoInput.parse(item));
     return store.writeLocked(() => {

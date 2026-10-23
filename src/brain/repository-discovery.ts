@@ -14,9 +14,10 @@ export interface RepositorySummary {
 }
 export type RepositoryCatalog = () => RepositorySummary[];
 
+// List local projects and their OS-user permissions.
 export function localRepositoryCatalog(configRoot: string): RepositorySummary[] {
 	return listBrainProjects(configRoot).map((project) => ({
-		id: (project.repository?.url ? githubRepository(project.repository.url) : null) ?? project.name,
+		id: project.repository?.url ? githubRepository(project.repository.url) : project.name,
 		name: project.display_name ?? project.name, group: project.pool,
 		permissions: ['read', 'write', 'review'] as Permission[], configuration: 'project' as const
 	}));
@@ -41,6 +42,7 @@ export function remoteRepositoryCatalog(config: RemoteConfig, subject: string, c
 	}).sort((a, b) => a.id.localeCompare(b.id));
 }
 
+// Register repository and group discovery tools with permission filtering.
 export function registerRepositoryTools(server: McpServer, catalog: RepositoryCatalog, allow: (name: string) => boolean = () => true): void {
 	for (const name of ['list_repositories', 'list_repository_groups'] as const) {
 		if (!allow(name)) continue;
@@ -65,6 +67,7 @@ export function registerRepositoryTools(server: McpServer, catalog: RepositoryCa
 	}
 }
 
+// Create an MCP server limited to repository discovery.
 export function createRepositoryDiscoveryServer(catalog: RepositoryCatalog): McpServer {
 	const server = new McpServer({ name: 'agent-brain', version: packageVersion() });
 	registerRepositoryTools(server, catalog);

@@ -3,10 +3,7 @@ import * as path from 'path';
 
 let cached: string | null = null;
 
-/**
- * The package version, read from package.json next to the compiled output.
- * This is the single source; nothing else in the tree hardcodes a version.
- */
+// Read and cache the installed package version, falling back to 0.0.0.
 export function packageVersion(): string {
 	if (cached === null) {
 		try {

@@ -10,9 +10,10 @@ const version_1 = require("../version");
 const config_1 = require("./config");
 const remote_policy_1 = require("./remote-policy");
 const repositories_1 = require("./repositories");
+// List local projects and their OS-user permissions.
 function localRepositoryCatalog(configRoot) {
     return (0, config_1.listBrainProjects)(configRoot).map((project) => ({
-        id: (project.repository?.url ? (0, repositories_1.githubRepository)(project.repository.url) : null) ?? project.name,
+        id: project.repository?.url ? (0, repositories_1.githubRepository)(project.repository.url) : project.name,
         name: project.display_name ?? project.name, group: project.pool,
         permissions: ['read', 'write', 'review'], configuration: 'project'
     }));
@@ -44,6 +45,7 @@ function remoteRepositoryCatalog(config, subject, clientId, scopes) {
         }
     }).sort((a, b) => a.id.localeCompare(b.id));
 }
+// Register repository and group discovery tools with permission filtering.
 function registerRepositoryTools(server, catalog, allow = () => true) {
     for (const name of ['list_repositories', 'list_repository_groups']) {
         if (!allow(name))
@@ -69,6 +71,7 @@ function registerRepositoryTools(server, catalog, allow = () => true) {
         });
     }
 }
+// Create an MCP server limited to repository discovery.
 function createRepositoryDiscoveryServer(catalog) {
     const server = new mcp_js_1.McpServer({ name: 'agent-brain', version: (0, version_1.packageVersion)() });
     registerRepositoryTools(server, catalog);

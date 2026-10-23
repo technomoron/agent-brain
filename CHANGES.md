@@ -1,3 +1,7 @@
+Version 0.1.3 (2026-10-23)
+--------------------------
+* Simplify internal helpers and add concise function and method comments.
+
 Version 0.1.2 (2026-10-23)
 --------------------------
 * Preserve repeated sync exports, reversals and deletions before deployment.

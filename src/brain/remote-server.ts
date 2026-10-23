@@ -11,11 +11,13 @@ import { coversPattern } from './repositories';
 import { createRepositoryDiscoveryServer, remoteRepositoryCatalog } from './repository-discovery';
 
 type User = RemoteConfig['users'][number];
+// Require a configured secret from the server environment.
 function secret(name: string): string {
 	const value = process.env[name];
 	if (!value) throw new Error('Missing environment variable ' + name);
 	return value;
 }
+// Create a private runtime directory and verify its ownership.
 function privateDirectory(directory: string): void {
 	fs.mkdirSync(directory, { recursive: true, mode: 0o700 });
 	const stat = fs.lstatSync(directory);
@@ -52,7 +54,9 @@ export async function createRemoteApi(configFile: string) {
 		passwordHashes.set(user.passwordEnv, credentials.getUserPasswordHash(stored));
 	}
 	class ConfigAuth extends BaseAuthAdapter<User, { subject: string }> {
+		// Find an enabled user by subject or login.
 		override async getUser(identifier: string | number) { return policy().users.find((u) => !u.disabled && (u.subject === String(identifier) || u.login === identifier)) ?? null; }
+		// Use the configured subject as the authentication identity.
 		override getUserId(user: User) { return user.subject; }
 		// Resolve the configured password to the existing bcrypt verifier.
 		override getUserPasswordHash(user: User) {
@@ -61,11 +65,17 @@ export async function createRemoteApi(configFile: string) {
 			if (user.passwordEnv && passwordHashes.has(user.passwordEnv)) return passwordHashes.get(user.passwordEnv)!;
 			throw new Error('Restart the remote server after changing password environment settings');
 		}
+		// Expose only the configured subject in authentication responses.
 		override filterUser(user: User) { return { subject: user.subject }; }
+		// Verify a password through the configured authentication store.
 		override verifyPassword(password: string, hash: string) { return credentials.verifyPassword(password, hash); }
+		// Read an OAuth client from the authentication store.
 		override getClient(id: string) { return credentials.getClient(id); }
+		// Verify a confidential client secret through the authentication store.
 		override verifyClientSecret(client: Parameters<MemAuthStore['verifyClientSecret']>[0], value: string | null) { return credentials.verifyClientSecret(client, value); }
+		// Store an authorization code for the OAuth exchange.
 		override createAuthCode(input: Parameters<MemAuthStore['createAuthCode']>[0]) { return credentials.createAuthCode(input); }
+		// Consume an authorization code for its registered client.
 		override consumeAuthCode(code: string, client: string) { return credentials.consumeAuthCode(code, client); }
 	}
 	for (const client of initial.clients) {
@@ -76,7 +86,9 @@ export async function createRemoteApi(configFile: string) {
 	}
 	const api = new ApiServer({ authApi: false, origins: [], devMode: false }).authStorage(new ConfigAuth()).setTokenStore(sessions);
 	const login = new OAuthPasswordLogin(api, { issuer: initial.issuer,
+		// Authorize the requested resource and OAuth scopes against current policy.
 		allow: (subject, client, scopes, resources) => resources.length === 1 && resources[0] === initial.resource && allowedGrant(policy(), String(subject), client, scopes),
+		// Verify TOTP and persist its counter to prevent reuse.
 		verifySecondFactor: (value, code) => {
 			const user = value as User;
 			if (!user.totpSecretEnv) return true;
@@ -93,6 +105,7 @@ export async function createRemoteApi(configFile: string) {
 	}).register();
 	const attempts = new Map<string, { expires: number; count: number }>();
 	const provider = new OAuthAuthorizationServer(api, { issuer: initial.issuer, resources: [initial.resource],
+		// Limit authorization attempts per IP and bound the attempt cache.
 		rateLimit: (request) => {
 			for (const [key, entry] of attempts) if (entry.expires <= Date.now()) attempts.delete(key);
 			const entry = attempts.get(request.ip) ?? { count: 0, expires: Date.now() + 300000 };
@@ -104,12 +117,15 @@ export async function createRemoteApi(configFile: string) {
 		accessSecret: secret(initial.accessSecretEnv), refreshSecret: secret(initial.refreshSecretEnv),
 		authorize: login.authorize,
 		serviceAccounts: Object.fromEntries(initial.clients.filter((c) => c.kind === 'service').map((c) => [c.id, c.subject!])),
+		// Recheck the resource and current grants before issuing tokens.
 		validateGrant: (grant) => grant.resources.length === 1 && grant.resources[0] === initial.resource && allowedGrant(policy(), grant.userId, grant.clientId, grant.scopes)
 	}).register();
 	const resource = new URL(initial.resource);
 	const endpoint = resource.pathname || '/';
 	const metadataPath = '/.well-known/oauth-protected-resource' + (endpoint === '/' ? '' : endpoint);
+	// Publish the OAuth metadata for the configured MCP resource.
 	api.fastify.get(metadataPath, async () => provider.resourceMetadata(initial.resource));
+	// Authenticate each request and expose only its authorized repository tools.
 	api.fastify.post(endpoint, async (request, reply) => {
 		if (request.headers.origin && request.headers.origin !== resource.origin) return reply.code(403).send({ error: 'Invalid origin' });
 		const authorization = request.headers.authorization;
@@ -126,6 +142,7 @@ export async function createRemoteApi(configFile: string) {
 		const user = current.users.find((u) => u.subject === claims.sub && !u.disabled);
 		const client = current.clients.find((c) => c.id === claims.client_id);
 		if (!user || !client || (user.kind === 'service' ? client.kind !== 'service' || client.subject !== user.subject : client.kind === 'service')) return reply.code(403).send({ error: 'Identity access denied' });
+		// List repositories visible to the authenticated identity and token.
 		const catalog = () => remoteRepositoryCatalog(policy(), claims.sub, claims.client_id, claims.scope.split(' '));
 		let store: BrainStore | undefined;
 		let server;
@@ -146,31 +163,40 @@ export async function createRemoteApi(configFile: string) {
 				if (scope === 'global') return scopes.includes('repo:*') && allowedGrant(policy(), claims.sub, claims.client_id, ['read','write','repo:*']);
 				return !!repo.group && initial.repositories.filter(member => member.group === repo.group).every(member => repositoryPermissions(policy(), claims.sub, claims.client_id, scopes, member.id).has('write'));
 			};
-			server = createBrainServer(store, { sync: async (message) => {
-				if (!initial.gitSync || !initial.dataRoot) throw new Error('Brain Git synchronization is not configured; changes remain on the server.');
-				const scopes = ['projects/' + repository];
-				if (repo.group && canWriteScope('pool')) scopes.push('pools/' + repo.group);
-				if (canWriteScope('global')) scopes.push('global');
-				return new Promise((resolve, reject) => {
-					const child = execFile(process.execPath, [path.resolve(__dirname, '../../ops/config-sync.cjs')], { timeout: 180000, maxBuffer: 1024 * 1024 }, (error, stdout, stderr) => {
-						if (error) reject(new Error(stderr.trim() || error.message));
-						else { try { resolve(JSON.parse(stdout)); } catch { reject(new Error('Invalid Brain sync response')); } }
+			server = createBrainServer(store, {
+				// Export authorized scopes through the configured Git synchronization worker.
+				sync: async (message) => {
+					if (!initial.gitSync || !initial.dataRoot) throw new Error('Brain Git synchronization is not configured; changes remain on the server.');
+					const scopes = ['projects/' + repository];
+					if (repo.group && canWriteScope('pool')) scopes.push('pools/' + repo.group);
+					if (canWriteScope('global')) scopes.push('global');
+					return new Promise((resolve, reject) => {
+						const child = execFile(process.execPath, [path.resolve(__dirname, '../../ops/config-sync.cjs')], { timeout: 180000, maxBuffer: 1024 * 1024 }, (error, stdout, stderr) => {
+							if (error) reject(new Error(stderr.trim() || error.message));
+							else { try { resolve(JSON.parse(stdout)); } catch { reject(new Error('Invalid Brain sync response')); } }
+						});
+						child.stdin?.end(JSON.stringify({ ...initial.gitSync, dataRoot: initial.dataRoot, scopes, reviews: permissions.has('review'), message }));
 					});
-					child.stdin?.end(JSON.stringify({ ...initial.gitSync, dataRoot: initial.dataRoot, scopes, reviews: permissions.has('review'), message }));
-				});
-			}, repository, group: repo.group, repositories: catalog, allowScopeWrite: (scope) => {
-				return scope === 'project' || (scope === 'default' ? !initial.dataRoot : canWriteScope(scope));
-			}, allowTool: (name) => { const required = toolPermission(name); return required !== null && permissions.has(required); } });
+				}, repository, group: repo.group, repositories: catalog,
+				// Check whether this request may change the target storage scope.
+				allowScopeWrite: (scope) => scope === 'project' || (scope === 'default' ? !initial.dataRoot : canWriteScope(scope)),
+				// Check whether this token permits the requested tool operation.
+				allowTool: (name) => { const required = toolPermission(name); return required !== null && permissions.has(required); } });
 		}
 		const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined, enableJsonResponse: true });
 		reply.hijack();
 		try { await server.connect(transport); await transport.handleRequest(request.raw, reply.raw, request.body); }
 		finally { await server.close(); store?.close(); }
 	});
-	api.fastify.route({ method: ['GET','DELETE'], url: endpoint, handler: async (_request, reply) => reply.code(405).send() });
-	return { api, provider, config: initial, close: () => api.fastify.close() };
+	api.fastify.route({ method: ['GET','DELETE'], url: endpoint,
+		// Reject unsupported HTTP methods on the MCP endpoint.
+		handler: async (_request, reply) => reply.code(405).send() });
+	return { api, provider, config: initial,
+		// Close the remote API listener.
+		close: () => api.fastify.close() };
 }
 
+// Start the configured remote API listener.
 export async function serveRemote(configFile: string) {
 	const service = await createRemoteApi(configFile);
 	await service.api.fastify.listen(service.config.listen.socket ? { path: service.config.listen.socket } : { host: '127.0.0.1', port: service.config.listen.port });

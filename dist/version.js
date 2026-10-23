@@ -4,10 +4,7 @@ exports.packageVersion = packageVersion;
 const fs = require("fs");
 const path = require("path");
 let cached = null;
-/**
- * The package version, read from package.json next to the compiled output.
- * This is the single source; nothing else in the tree hardcodes a version.
- */
+// Read and cache the installed package version, falling back to 0.0.0.
 function packageVersion() {
     if (cached === null) {
         try {

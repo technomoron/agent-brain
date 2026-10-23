@@ -7,6 +7,7 @@ const { manifest, readSnapshot, fileContents, coreSkills } = require('./config-p
 // Only canonical data is exported. Client settings, server paths and policy stay in Git/admin configuration.
 function exportPlan(base, live, remote, scopes, reviews = true) {
  const changes = {}, conflicts = [];
+ // Limit exports to authorized canonical data and permitted review records.
  const eligible = name => !coreSkills.has(/\/skills\/([^/]+)\//.exec(name)?.[1]) && scopes.some(scope => name.startsWith(scope + '/')) &&
   !/\/(?:config\.yaml|agent-run\.jsonc|review\.jsonc)$/.test(name) &&
   (reviews || !/\/(?:reviews\/|review-history\.jsonl$|review-counters\.json$)/.test(name));
@@ -17,12 +18,14 @@ function exportPlan(base, live, remote, scopes, reviews = true) {
  }
  return { changes, conflicts };
 }
+// Commit and push canonical Brain changes with recoverable export baselines.
 function sync({ dataRoot, catalog, state, scopes, reviews = true, message }) {
  fs.mkdirSync(state, { recursive: true, mode: 0o700 });
  const lock = path.join(state, 'catalog.lock');
  try { fs.mkdirSync(lock, { mode: 0o700 }); }
  catch (error) { if (error.code === 'EEXIST') throw Error('Another Brain sync or configuration deployment is running; retry sync.'); throw error; }
  let checkout;
+ // Run noninteractive Git commands with bounded output and execution time.
  const git = (root, args) => execFileSync('git', ['-C', root, ...args], {
   encoding: 'utf8', timeout: 60000, maxBuffer: 100 * 1024 * 1024,
   env: { ...process.env, GIT_TERMINAL_PROMPT: '0' }, stdio: ['ignore', 'pipe', 'pipe']
@@ -33,6 +36,7 @@ function sync({ dataRoot, catalog, state, scopes, reviews = true, message }) {
   const exportFile = path.join(state, 'export-baseline.json');
   let exported = fs.existsSync(exportFile) ? JSON.parse(fs.readFileSync(exportFile, 'utf8')) : {};
   if (exported.deployment !== deployment) exported = { deployment };
+  // Atomically persist the acknowledged or pending export baseline.
   const saveExport = () => {
    const temporary = exportFile + '.' + randomUUID();
    try { fs.writeFileSync(temporary, JSON.stringify(exported), { flag: 'wx', mode: 0o600 }); fs.renameSync(temporary, exportFile); }
