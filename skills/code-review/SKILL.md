@@ -34,10 +34,10 @@ Classify issues using three independent fields:
 | Field | Allowed values | Rule |
 | --- | --- | --- |
 | Origin label | `Code Review`, `Bug Report`, `Feature Request`, `ToDo`, `Question` | Exactly one of these labels per issue. |
-| Issue type | `Bug`, `Feature`, `Task`, `Inconsistency`, `Question`, `Documentation` | Exactly one; describes the work, not its origin. |
+| Issue type | `Bug`, `Security`, `Feature`, `Task`, `Inconsistency`, `Question`, `Documentation` | Exactly one; describes the work, not its origin. |
 | Priority | `Urgent`, `High`, `Medium`, `Low` | Existing organization issue field, independent of origin and type. |
 
-A defect discovered during review has label `Code Review` and type `Bug`; a user-reported defect has label `Bug Report` and type `Bug`. A requested capability has label `Feature Request` and type `Feature`. A manual task or follow-up task created while fixing a review finding has label `ToDo` and type `Task`; link follow-ups to their original issue. A review finding about contradictory behavior or configuration may use type `Inconsistency`. Work to correct or improve documentation uses type `Documentation`. A question has origin label `Question` and type `Question` unless it originated in a review, in which case retain origin `Code Review`.
+A defect discovered during review has label `Code Review` and type `Bug`; a user-reported defect has label `Bug Report` and type `Bug`. Use type `Security` for vulnerabilities or security weaknesses, including authentication or authorization failures, credential exposure and unsafe handling of untrusted input. Keep the origin label and Priority independent; do not add a security label or combine issue types. A requested capability has label `Feature Request` and type `Feature`. A manual task or follow-up task created while fixing a review finding has label `ToDo` and type `Task`; link follow-ups to their original issue. A review finding about contradictory behavior or configuration may use type `Inconsistency`. Work to correct or improve documentation uses type `Documentation`. A question has origin label `Question` and type `Question` unless it originated in a review, in which case retain origin `Code Review`.
 
 Do not use `Code Review` as an issue type. Do not combine origin labels. Do not add category labels such as `bug` or `enhancement` that duplicate the work type. The five origin labels are the entire allowed label set. Do not create or apply additional labels unless the user explicitly requests them. Close as not planned only on the user's decision.
 
